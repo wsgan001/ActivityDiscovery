@@ -14,7 +14,7 @@ if(dataset== "UBICOMP"){
 }
 
 #========================== LOAD CLASSIFIER =============================
-load("desk.RData")  #classifiers
+load("day1_desk_whiteboard_desk_lying_EE.RData")  #classifiers
 
 #load("2006-08-23\\sleep_model.RData")  #classifiers
 #=========================== LOAD TEST DATA =======================================
@@ -34,18 +34,18 @@ if(dataset == "PLCouple1"){
 }
 
 if(dataset == "UBICOMP"){
-  filesnames = c("data\\day4-data.txt");
+  filesnames = c("data\\day1-data.txt");
   rawData = read.files(filesnames)
   data = rawData[,1:12]
   featureCnt = 12; 
   #read label
-  label = read.ubilabel("activities.txt", "label\\day4-activities.txt")
+  label = read.ubilabel("activities.txt", "label\\day1-activities.txt")
   
   features = c("pocket_x", "pocket_y", "pocket_z", "pocket_var_x", "pocket_var_y", "pocket_var_z",
                "wrist_x", "wrist_y", "wrist_z", "wrist_var_x", "wrist_var_y", "wrist_var_z");
  # docCnt = as.integer(length(label) / framesInDoc)
  # label = label[1:(framesInDoc*docCnt)]
-  load("day1_desk_whiteboard_desk_lying_EE.RData"); # normalize_params
+  load("day1_normal_energy_entropy.RData"); # normalize_params
  
   for(i in c(4:6,10:12)){data[,i] = vector.removenoise(data[, i], 0.02);}
 }
@@ -97,22 +97,22 @@ colnames(test_x) = features;
 
 #===================== generate doc label =============================
 docCnt = length(data[,1]) / framesInDoc
-docLabel = 1:docCnt
+doc_labels = 1:docCnt
 for(docIndex in 1:docCnt){
-  docLabel[docIndex] = voteMajor(docIndex)
+  doc_labels[docIndex] = voteMajor(docIndex)
 }
-docLabelSet = names(table(docLabel))
+doc_label_set = names(table(doc_labels))
 
 #================= visualize topic distribution =============================
 colors = c('gray','orange', 'red', 'blue',  'green',  'brown', 'cornflowerblue','pink', 'green4', 'lightcoral', 'mediumslateblue', 'navy','navajowhite', 'saddlebrown', 'gray20', 'darkgoldenrod3', 'dodgerblue', 'gold4', 'deeppink4')
 
-viz_ground_truth(dataset);
+viz_ground_truth(dataset, doc_labels);
 
 #==================== classify data with models ==================================
 
 
 test_classifier_indexes = c(1, 2, 3, 4)
-ground_truth_activities = c(14, 27, 14, 25)
+ground_truth_activities = c(14, 25, 27, 14)
 
 classify_results = c();
 
@@ -137,8 +137,8 @@ for(i in 1:length(test_classifier_indexes)){
   
   classify_results = rbind(classify_results, pred_class);
   
-  ground_pos = which(docLabel == activity)
-  ground_neg = which(docLabel != activity)
+  ground_pos = which(doc_labels == activity)
+  ground_neg = which(doc_labels != activity)
   
   test_y_pos = which(pred_class == T)
   test_y_neg = which(pred_class == F)

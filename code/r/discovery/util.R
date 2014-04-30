@@ -143,23 +143,28 @@ data.fft_energy_entropy = function(dataframe){
 
 
 #--------------------------------------------------------------------
-viz_ground_truth = function(dataset){
-  plot(1, type="o", col=colors[1],xlim=c(1, docCnt), ylim=c(0, 1.5), 
+viz_ground_truth = function(dataset, doc_labels){
+  plot(1, type="o", col=colors[1],xlim=c(1, length(doc_labels)), ylim=c(0, 1.5), 
        xlab="activities", ylab="topic probability")
-  docLabelSet = names(table(docLabel))
-  for(i in 1:docCnt){
-    points(x=i, y=1.2, col=colors[which(docLabelSet==docLabel[i])], pch=16)
+  for(i in 1:length(doc_labels)){
+    points(x=i, y=1.2, col=colors[which(doc_label_set==doc_labels[i])], pch=16)
   }  
   if(dataset == "PLCouple1"){
     labelConfig = load_labelIDConfig_plc("../../LABELID.config");
-    for(i in 2:length(docLabelSet)){
-      text(50 + i%%5 * 300, 1.2+(i / 5)*0.07, labelConfig[as.integer(docLabelSet[i])], adj = c(0,0), col=colors[i]);
+    for(i in 2:length(doc_label_set)){
+      text(50 + i%%5 * 300, 1.2+(i / 5)*0.07, labelConfig[as.integer(doc_label_set[i])], adj = c(0,0), col=colors[i]);
     } 
   }
   if(dataset == "UBICOMP"){
     labelConfig = load_labelIDConfig_ubi("activities.txt");
-    for(i in 2:length(docLabelSet)){
-      text(50 + i%%5 * 300, 1.2+(i / 5)*0.07, labelConfig[as.integer(docLabelSet[i])+1], adj = c(0,0), col=colors[i]);
+    for(i in 2:length(doc_label_set)){
+      text(50 + i%%5 * 300, 1.2+(i / 5)*0.07, labelConfig[as.integer(doc_label_set[i])+1], adj = c(0,0), col=colors[i]);
     }
+  }
+}
+
+viz_topic_distribution = function(pred, K){
+  for(i in 1:K){
+    lines(pred[,i], type="o", pch=22, lty=2, col=colors[i])
   }
 }

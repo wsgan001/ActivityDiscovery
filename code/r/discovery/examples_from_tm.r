@@ -28,8 +28,10 @@ is_known_segment = function(segmentation, segIndex, knownClassifiers, data){
 is_known_doclist = function(data, classifiers){
   is_class = lapply(classifiers, is_class_doclist, data=data);
   is_known_class = rep(FALSE, length(data[,1]));
-  for(i in 1:length(classifiers)){
-    is_known_class = is_known_class | c(is_class[[i]]);
+  if(length(classifiers) > 0){
+    for(i in 1:length(classifiers)){
+      is_known_class = is_known_class | c(is_class[[i]]);
+    }
   }
   return(is_known_class);
 }
@@ -77,10 +79,10 @@ sampleNegExamples = function(targetSegIndex, segmentation, diffThreshold){
 }
 
 
-viz_train_sample = function(posTrainIndex, negTrainIndex, segmentation){
-  plot(1, xlim=c(0,docCnt), ylim = c(0,1.5));
+viz_train_sample = function(posTrainIndex, negTrainIndex, segmentation, doc_labels){
+  plot(1, xlim=c(0,length(doc_labels)), ylim = c(0,1.5));
   for(i in 1:docCnt){   
-    points(x=i, y=1.2, col=colors[which(docLabelSet==docLabel[i])], pch=16)
+    points(x=i, y=1.2, col=colors[which(doc_label_set==doc_labels[i])], pch=16)
   }
   visualSegmentation(segmentation);
   for(i in posTrainIndex){

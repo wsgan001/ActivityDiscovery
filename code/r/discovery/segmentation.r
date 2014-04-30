@@ -3,11 +3,13 @@ isActivity = function(x){
   sumVar = 0;
   for(i in 1:K){sumVar = sumVar + var(x[,i]);}
   isAct = ifelse(sumVar<0.25,1,0);
+  #isAct = ifelse(sumVar<0.2,1,0);
   if(isAct == F){
     for(frameIndex in 1:length(x[,1])){
       sumVar = 0;
       for(i in 1:K){sumVar = sumVar + var(x[-frameIndex,i]);}
       isAct = ifelse(sumVar<0.2,1,isAct);
+      #isAct = ifelse(sumVar<0.15,1,isAct);
     }
   }
   return(isAct)

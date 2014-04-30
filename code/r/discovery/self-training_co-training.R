@@ -104,12 +104,12 @@ svm.find_confident_example = function(pred_score, num, test_index){
   return(index)
 }
 
-viz_pred_result = function(pred_score, test_index){
+viz_pred_result = function(pred_score, test_index, doc_labels){
   #ground truth
-  plot(1, type="o", col=colors[1],xlim=c(0, docCnt+2), ylim=c(0, 1.5), 
+  plot(1, type="o", col=colors[1],xlim=c(0, length(doc_labels)+1), ylim=c(0, 1.5), 
        xlab="activities", ylab="topic probability")
   for(i in 1:docCnt){
-    points(x=i, y=0.9, col=colors[which(docLabelSet==docLabel[i])], pch=16)
+    points(x=i, y=0.9, col=colors[which(docLabelSet==doc_labels[i])], pch=16)
   }
   #prediction
   for(i in 1:length(test_index)){

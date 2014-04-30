@@ -4,7 +4,10 @@ source(paste(srcdir, "segmentation.R", sep=''))
 source(paste(srcdir, "examples_from_tm.r", sep=''))
 source(paste(srcdir, "self-training_co-training.R", sep=''))
 
+#configurable parameters
 dataset = "UBICOMP"
+extend = "fft_energy_entropy";
+iteration_mode = TRUE;
 
 framesInDoc = 2 * 30; #30sec # 5*20
 
@@ -83,13 +86,13 @@ if(dataset == "UBICOMP"){
 
 
 #===================== generate doc =============================
-docLabel = 1:docCnt
+doc_labels = 1:docCnt
 #file.remove(paste("docs\\", list.files("docs"), sep=''))
 for(docIndex in 1:docCnt){
  # writeDoc(docIndex, "docs");
-  docLabel[docIndex] = voteMajor(docIndex)
+  doc_labels[docIndex] = voteMajor(docIndex)
 }
-docLabelSet = names(table(docLabel))
+doc_label_set = names(table(doc_labels))
 
 if(dataset == "PLCouple1"){
   for(i in 13:16){data[,i] = vector.removenoise(data[, i], 0.02);}
@@ -104,7 +107,6 @@ if(dataset == "UBICOMP"){
 
 if(dataset == "UBICOMP"){
   raw_sensor_dim = c(1, 2, 3,7, 8, 9);
-  extend = "fft_energy_entropy";
   if(extend == "fft_coe"){
     fftnum = 5;
     extendedFeatureCnt = featureCnt + length(raw_sensor_dim) * fftnum * 2;
@@ -141,114 +143,142 @@ doc_data = dataframe.normalize(doc_data);
 
 # topic model
 
-classifiers = c()
-knownSegIndexes = c()
-
 
 library(topicmodels)
 library(tm)
-ovid <- Corpus(DirSource(paste(base, "\\docs", sep="")),readerControl = list(language = "lat"))
+ovid_all <- Corpus(DirSource(paste(base, "\\docs", sep="")),readerControl = list(language = "lat"))
 
-#is_known_doc = is_known_doclist(doc_data, classifiers);
-#known_docs_indexes = which(is_known_doc == T)
+#init all the values
+classifiers = c()
+knownSegIndexes = c()
 all_doc_indexes = 1:docCnt;
-#unknown_doc_indexes = all_doc_indexes[-known_docs_indexes];
-unknown_doc_indexes = all_doc_indexes;
-  
-ovid = ovid[unknown_doc_indexes];
-
-
-
-dtm <- DocumentTermMatrix(ovid,control=list(wordLengths=c(1,Inf)))
+iteration_doc_indexes = all_doc_indexes;
+iteration_doc_labels = doc_labels;
+iteration_doc_data = doc_data;
+ovid = ovid_all
 K=10
-train.lda <- LDA(dtm,K)   
-get_terms(train.lda, 10)
-
-post <- posterior(train.lda, newdata = dtm)
-pred = round(post$topics, digits = 2)
-
-
 colors = c('gray','orange', 'red', 'blue',  'green',  'brown', 'cornflowerblue','pink', 'green4', 'lightcoral', 'mediumslateblue', 'navy','navajowhite', 'saddlebrown', 'gray20', 'darkgoldenrod3', 'dodgerblue', 'gold4', 'deeppink4')
 
-# plot the distribution of topics
-viz_ground_truth(dataset);
-for(i in 1:K){
-  lines(pred[,i], type="o", pch=22, lty=2, col=colors[i])
+get_topic_distribution = function(ovid, K){
+  dtm <- DocumentTermMatrix(ovid,control=list(wordLengths=c(1,Inf)))
+  train.lda <- LDA(dtm,K)   
+  get_terms(train.lda, 10)
+  post <- posterior(train.lda, newdata = dtm)
+  pred = round(post$topics, digits = 2)
+  return(pred);
 }
 
+# first time segmentation by topic model
+pred = get_topic_distribution(ovid, K);
+# plot the distribution of topics
+viz_ground_truth(dataset, doc_labels);
+viz_topic_distribution(pred, K);
 #============================= segmentation ========================================
-
-segmentation = mergeNeighbourActivity(pred[1:(length(unknown_doc_indexes) - 5),])
+segmentation = mergeNeighbourActivity(pred[1:(length(interation_doc_indexes) - 5),])
 visualSegmentation(segmentation)
-
-
-#===================== find the longest segmentation & pos/neg samples===============================
 segLength = segmentation[2,] - segmentation[1, ]
 segmentation = rbind(segmentation, segLength)
 
+# start iteration - build classifier
 
-#=============================prepare training samples ==============================================
-
-longSegIndex = get_long_segmentation(segmentation, knownSegIndexes)
-while(is_known_segment(segmentation, longSegIndex, classifiers, doc_data) == T){
-  knownSegIndexes = c(knownSegIndexes, longSegIndex)
+while(TRUE){
+  # if needed, start another segmentation iteration
+  if(iteration_mode == TRUE){
+    is_known_doc = is_known_doclist(iteration_doc_data, classifiers);
+    known_docs_indexes = which(is_known_doc == T)
+    if(length(known_docs_indexes) > 0.5 * length(iteration_doc_labels)){  # another segmentation iteration
+      iteration_doc_indexes = iteration_doc_indexes[-known_docs_indexes];
+      ovid = ovid_all[iteration_doc_indexes];
+      iteration_doc_labels = doc_labels[iteration_doc_indexes];
+      iteration_doc_data = doc_data[iteration_doc_indexes, ]
+      knownSegIndexes = c();
+      
+      pred = get_topic_distribution(ovid, K);
+      # plot the distribution of topics
+      viz_ground_truth(dataset, iteration_doc_labels);
+      viz_topic_distribution(pred, K);
+      #============================= segmentation ========================================
+      segmentation = mergeNeighbourActivity(pred[1:(length(iteration_doc_indexes) - 5),])
+      visualSegmentation(segmentation)
+      segLength = segmentation[2,] - segmentation[1, ]
+      segmentation = rbind(segmentation, segLength)
+    } 
+  }
+  
+  # build another classifier
+  #=============================prepare training samples ==============================================
+  
   longSegIndex = get_long_segmentation(segmentation, knownSegIndexes)
-}
-knownSegIndexes = c(knownSegIndexes, longSegIndex)
-
-posTrainIndex = samplePosExamples(longSegIndex, segmentation)
-topicDiffThreshold = 1.5
-negTrainIndex = sampleNegExamples(longSegIndex, segmentation, topicDiffThreshold)
-while(length(negTrainIndex) < length(posTrainIndex)){
-  topicDiffThreshold = topicDiffThreshold - 0.1;
+  while(is_known_segment(segmentation, longSegIndex, classifiers, iteration_doc_data) == T){
+    knownSegIndexes = c(knownSegIndexes, longSegIndex)
+    longSegIndex = get_long_segmentation(segmentation, knownSegIndexes)
+  }
+  knownSegIndexes = c(knownSegIndexes, longSegIndex)
+  
+  posTrainIndex = samplePosExamples(longSegIndex, segmentation)
+  topicDiffThreshold = 1.5
   negTrainIndex = sampleNegExamples(longSegIndex, segmentation, topicDiffThreshold)
-}
-viz_train_sample(posTrainIndex, negTrainIndex, segmentation);
-
-
-train_index = union(posTrainIndex, negTrainIndex)
-index = 1:length(docLabel)
-test_index <- index[-train_index]
-train_x = doc_data[train_index, ]
-train_y = c(rep(1, length(posTrainIndex)), rep(-1, length(negTrainIndex)));
-test_x = doc_data[test_index, ]
-train_data = data.frame(train_x, train_y);
-
-
-colnames(train_data) = c(features, 'target')
-colnames(test_x) = features;
-
-# ===================================== co-training ===================================================
-
-train_data1 = train_data;
-train_data2 = train_data;
-for(i in 1:4){
-  exchangeNum = as.integer(length(test_index) * 0.2);
-  model1 = decision_tree.train(train_data1);
-  pred_score1 = decision_tree.predict(model1, test_x);
-  confident_index1 = decision_tree.find_confident_example(pred_score1, exchangeNum, test_index)
-  confident_x1 = doc_data[test_index[confident_index1], ]
-  confident_y1 = ifelse(pred_score1[confident_index1] > 0, 1, -1);
-  confident_data1 = data.frame(confident_x1, confident_y1)  
-  colnames(confident_data1) = c(features, 'target')
+  while(length(negTrainIndex) < length(posTrainIndex)){
+    topicDiffThreshold = topicDiffThreshold - 0.1;
+    negTrainIndex = sampleNegExamples(longSegIndex, segmentation, topicDiffThreshold)
+  }
+  viz_train_sample(posTrainIndex, negTrainIndex, segmentation, iteration_doc_labels);
   
-  model2 = svm.train(train_data2);
-  pred_score2 = svm.predict(model2, test_x)
-  confident_index2 = svm.find_confident_example(pred_score2, exchangeNum, test_index)
-  confident_x2 = doc_data[test_index[confident_index2], ]
-  confident_y2 = ifelse(pred_score2[confident_index2] > 0, 1, -1);
-  confident_data2 = data.frame(confident_x2, confident_y2)  
-  colnames(confident_data2) = c(features, 'target')
   
-  train_data1 = rbind(train_data1, confident_data2)
-  train_data2 = rbind(train_data2, confident_data1)
+  train_index = union(posTrainIndex, negTrainIndex)
+  index = 1:length(iteration_doc_labels)
+  test_index <- index[-train_index]
+  train_x = iteration_doc_data[train_index, ]
+  train_y = c(rep(1, length(posTrainIndex)), rep(-1, length(negTrainIndex)));
+  test_x = iteration_doc_data[test_index, ]
+  
+  if(iteration_mode == TRUE){ #add known doc as negtive examples
+    neg_known_indexes = sample(all_doc_indexes[-iteration_doc_indexes], 0.1 * length(iteration_doc_indexes))
+    neg_known_data = doc_data[neg_known_indexes, ]
+    train_x = rbind(train_x, neg_known_data)
+    train_y = c(train_y, rep(-1, length(neg_known_indexes)))
+  }
+  
+  train_data = data.frame(train_x, train_y);
+  
+  
+  colnames(train_data) = c(features, 'target')
+  colnames(test_x) = features;
+  
+  # ===================================== co-training ===================================================
+  
+  train_data1 = train_data;
+  train_data2 = train_data;
+  for(i in 1:4){
+    exchangeNum = as.integer(length(test_index) * 0.2);
+    model1 = decision_tree.train(train_data1);
+    pred_score1 = decision_tree.predict(model1, test_x);
+    confident_index1 = decision_tree.find_confident_example(pred_score1, exchangeNum, test_index)
+    confident_x1 = doc_data[test_index[confident_index1], ]
+    confident_y1 = ifelse(pred_score1[confident_index1] > 0, 1, -1);
+    confident_data1 = data.frame(confident_x1, confident_y1)  
+    colnames(confident_data1) = c(features, 'target')
+    
+    model2 = svm.train(train_data2);
+    pred_score2 = svm.predict(model2, test_x)
+    confident_index2 = svm.find_confident_example(pred_score2, exchangeNum, test_index)
+    confident_x2 = doc_data[test_index[confident_index2], ]
+    confident_y2 = ifelse(pred_score2[confident_index2] > 0, 1, -1);
+    confident_data2 = data.frame(confident_x2, confident_y2)  
+    colnames(confident_data2) = c(features, 'target')
+    
+    train_data1 = rbind(train_data1, confident_data2)
+    train_data2 = rbind(train_data2, confident_data1)
+  }
+  
+  viz_pred_result(pred_score2, test_index, iteration_doc_labels)
+  classifiers = c(classifiers, model2)
 }
 
-viz_pred_result(pred_score2, test_index)
-classifiers = c(classifiers, model2)
 
 
-#======================== generate classfier and filter the knowing docs =============================================
-is_known_doc = is_known_doclist(doc_data, classifiers);
+
+
+
 
 
