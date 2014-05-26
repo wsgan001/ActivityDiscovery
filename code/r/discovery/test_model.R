@@ -14,7 +14,17 @@ if(dataset== "UBICOMP"){
 }
 
 #========================== LOAD CLASSIFIER =============================
-load("day1_desk_whiteboard_desk_lying_EE.RData")  #classifiers
+load("classifiers\\day1_iterative_desk_lying_whiteboard_desk.RData")  #classifiers
+load("classifiers\\day1_noramlparams.RData"); # normalize_params
+
+filesnames = c("data\\day1-data.txt");
+label = read.ubilabel("activities.txt", "label\\day1-activities.txt")
+
+test_classifier_indexes = c(1, 2, 3)
+ground_truth_activities = c(14, 25, 27)
+
+
+
 
 #load("2006-08-23\\sleep_model.RData")  #classifiers
 #=========================== LOAD TEST DATA =======================================
@@ -34,18 +44,17 @@ if(dataset == "PLCouple1"){
 }
 
 if(dataset == "UBICOMP"){
-  filesnames = c("data\\day1-data.txt");
+  
   rawData = read.files(filesnames)
   data = rawData[,1:12]
   featureCnt = 12; 
-  #read label
-  label = read.ubilabel("activities.txt", "label\\day1-activities.txt")
+  #read label  
   
   features = c("pocket_x", "pocket_y", "pocket_z", "pocket_var_x", "pocket_var_y", "pocket_var_z",
                "wrist_x", "wrist_y", "wrist_z", "wrist_var_x", "wrist_var_y", "wrist_var_z");
  # docCnt = as.integer(length(label) / framesInDoc)
  # label = label[1:(framesInDoc*docCnt)]
-  load("day1_normal_energy_entropy.RData"); # normalize_params
+  
  
   for(i in c(4:6,10:12)){data[,i] = vector.removenoise(data[, i], 0.02);}
 }
@@ -81,18 +90,6 @@ for(row in 1:docCnt){
 }
 
 
-#normalized data with normalize_params
-#for(i in 1:extendedFeatureCnt){
-#  doc_data_m[, i] = (doc_data_m[, i] - normalize_params[1,i]) / ifelse(normalize_params[2,i] == 0, 1, normalize_params[2,i]);
-#}
-
-test_x = data.frame(doc_data_m)
-for(i in 1:extendedFeatureCnt){
-  test_x[, i] = (test_x[, i] - normalize_params[1,i]) / ifelse(normalize_params[2,i] == 0, 1, normalize_params[2,i]);
-}
-
-test_x = dataframe.normalize(test_x);
-colnames(test_x) = features;
 
 
 #===================== generate doc label =============================
@@ -103,6 +100,23 @@ for(docIndex in 1:docCnt){
 }
 doc_label_set = names(table(doc_labels))
 
+# remove unlabeled data
+unlabelled_index = which(doc_labels == 0);
+doc_labels = doc_labels[-unlabelled_index];
+doc_data_m = doc_data_m[-unlabelled_index,];
+
+
+
+
+test_x = data.frame(doc_data_m)
+for(i in 1:extendedFeatureCnt){
+  test_x[, i] = (test_x[, i] - normalize_params[1,i]) / ifelse(normalize_params[2,i] == 0, 1, normalize_params[2,i]);
+}
+
+test_x = dataframe.normalize(test_x);
+colnames(test_x) = features;
+
+
 #================= visualize topic distribution =============================
 colors = c('gray','orange', 'red', 'blue',  'green',  'brown', 'cornflowerblue','pink', 'green4', 'lightcoral', 'mediumslateblue', 'navy','navajowhite', 'saddlebrown', 'gray20', 'darkgoldenrod3', 'dodgerblue', 'gold4', 'deeppink4')
 
@@ -111,11 +125,12 @@ viz_ground_truth(dataset, doc_labels);
 #==================== classify data with models ==================================
 
 
-test_classifier_indexes = c(1, 2, 3, 4)
-ground_truth_activities = c(14, 25, 27, 14)
 
 classify_results = c();
+predscore_results = c();
 
+
+coverage = rep("x", length(test_classifier_indexes));
 sensitivity=rep("x", length(test_classifier_indexes));
 specify=rep("x", length(test_classifier_indexes));
 precision=rep("x", length(test_classifier_indexes));
@@ -132,10 +147,11 @@ for(i in 1:length(test_classifier_indexes)){
   activity = ground_truth_activities[i]
   ground_truth_act = ground_truth_activities[i]
   
-  pred_score = svm.predict(classifiers[[classifier_index]], test_x)
+  pred_score = c(svm.predict(classifiers[[classifier_index]], test_x))
   pred_class = ifelse(pred_score>0, T, F)
-  
+  pred_class = smooth_classify_tag(pred_class);
   classify_results = rbind(classify_results, pred_class);
+  predscore_results = rbind(predscore_results, pred_score);
   
   ground_pos = which(doc_labels == activity)
   ground_neg = which(doc_labels != activity)
@@ -154,6 +170,8 @@ for(i in 1:length(test_classifier_indexes)){
   #specify = t_neg / neg
   #precision = t_pos / (t_pos + f_pos)
   #accuracy = (t_pos + t_neg) / length(pred_class)
+  coverage[i] = build_percent_str(pos, pos+neg);
+  
   sensitivity[i] = build_percent_str(t_pos, pos);
   specify[i] = build_percent_str(t_neg, neg)
   precision[i] = build_percent_str(t_pos, t_pos + f_pos);
@@ -164,7 +182,24 @@ for(i in 1:length(test_classifier_indexes)){
   }
 }
 
-results = data.frame(sensitivity, specify, precision, accuracy)
+
+for(doc in 1:docCnt){
+  class_res = classify_results[, doc];
+  is_known = ifelse(length(class_res[class_res==T]) > 0, T, F);
+  class_colors = c('green', 'navy', 'brown');
+  if(is_known == T){
+    score = predscore_results[, doc];
+    col_index = which(score == max(score));
+    points(x=doc, y=1 , col=class_colors[col_index], pch=16); 
+  } 
+}
+
+#is_known_class = is_known_doclist(test_x, classifiers);
+#for(doc in 1:docCnt){
+#  points(x=doc, y=1.1, col=ifelse(is_known_class[doc]==T, 'green', 'red'), pch=16);
+#}
+
+results = data.frame(coverage, sensitivity, accuracy)
 print(results);
 
 
