@@ -2,8 +2,8 @@
 isActivity = function(x){
   sumVar = 0;
   for(i in 1:K){sumVar = sumVar + var(x[,i]);}
-  isAct = ifelse(sumVar<0.25,1,0);
-  #isAct = ifelse(sumVar<0.2,1,0);
+  #isAct = ifelse(sumVar<0.25,1,0);
+  isAct = ifelse(sumVar<0.3,1,0);
   if(isAct == F){
     for(frameIndex in 1:length(x[,1])){
       sumVar = 0;
@@ -46,7 +46,19 @@ visualSegmentation = function(startEndList){
   pairCnt = length(startEndList[1,])
   for(i in 1:pairCnt){
     for(j in startEndList[1,i] : startEndList[2,i]){
-      points(x = j, y = 1.07, col = ifelse(i%%2==0, 'gray', 'navy'), pch = 16)
+      points(x = j, y = 0.07, col = ifelse(i%%2==0, 'gray', 'navy'), pch = 16)
+    }
+  }
+}
+
+visualTargetSegmentation = function(startEndList, viz_index){
+  pairCnt = length(startEndList[1,])
+  for(i in 1:pairCnt){
+    for(j in startEndList[1,i] : startEndList[2,i]){
+      if(j %in% viz_index){
+        points(x = j - viz_index[1], y =1.07, col = ifelse(i%%2==0, 'gray', 'navy'), pch = 16)
+      }
+      
     }
   }
 }

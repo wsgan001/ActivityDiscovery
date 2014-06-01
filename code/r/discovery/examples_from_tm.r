@@ -30,7 +30,7 @@ is_known_doclist = function(data, classifiers){
   is_known_class = rep(FALSE, length(data[,1]));
   if(length(classifiers) > 0){
     for(i in 1:length(classifiers)){
-      is_known_class = is_known_class | c(is_class[[i]]);
+      is_known_class = is_known_class | smooth_classify_tag(c(is_class[[i]]));
     }
   }
   return(is_known_class);

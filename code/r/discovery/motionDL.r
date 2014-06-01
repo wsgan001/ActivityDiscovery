@@ -8,18 +8,19 @@ source(paste(srcdir, "self-training_co-training.R", sep=''))
 dataset = "UBICOMP"
 extend = "fft_energy_entropy";
 iteration_mode = TRUE;
+FILTER_KNOWN_CLASSIFIER = FALSE;
 
 framesInDoc = 2 * 30; #30sec # 5*20
 
 if(dataset == "PLCouple1"){
-  base="D:\\lessons\\motion recognition\\dataset\\PLCouple1\\sensor\\2006-09-06";
+  base="D:\\lessons\\motion recognition\\dataset\\PLCouple1\\sensor\\2006-08-23";
   setwd(base);
   data_dir = "acc_data_fps2_matched"
-  filesnames = paste(data_dir, list.files(data_dir), sep="\\")
+  filenames = paste(data_dir, list.files(data_dir), sep="\\")
   rawData = read.files(filenames)
-  data = rawData[,5:20]
-  label = rawData[, 21]
-  featureCnt = 16;
+  data = rawData[,5:22]
+  label = rawData[, 23]
+  featureCnt = 18;
   docCnt = as.integer(length(label) / framesInDoc)
 }
 
@@ -60,7 +61,7 @@ bin.equalfreq <- function(x,n){
 #-------------START: feature generation function region-------------------
 
 if(dataset == "PLCouple1"){
-  quantize_threshold = read.table("acc_data_fps2\\quantization.txt")
+  quantize_threshold = read.table("../quantize_data/quantization.txt")
 }
 
 if(dataset == "UBICOMP"){
@@ -73,8 +74,9 @@ for(i in 1:featureCnt){
 }
 
 if(dataset == "PLCouple1"){
-  features = c('hip1_x', 'hip1_y', 'hip1_z', 'hip2_x', 'hip2_y', 'hip2_z', 'wrist_x','wrist_y','wrist_z',
-               'thigh_x','thigh_y','thigh_z','hip1_var', 'hip2_var', 'wrist_var', 'thigh_var');
+  features = c('hip_x', 'hip_y', 'hip_z', 'wrist_x','wrist_y','wrist_z','thigh_x','thigh_y','thigh_z', 
+               'hip_var_x', 'hip_var_y', 'hip_var_z', 'wrist_var_x','wrist_var_y','wrist_var_z',
+               'thigh_var_x','thigh_var_y','thigh_var_z');
   
 }
 
@@ -87,38 +89,37 @@ if(dataset == "UBICOMP"){
 
 #===================== generate doc =============================
 doc_labels = 1:docCnt
-#file.remove(paste("docs\\", list.files("docs"), sep=''))
+file.remove(paste("docs\\", list.files("docs"), sep=''))
 for(docIndex in 1:docCnt){
- # writeDoc(docIndex, "docs");
+  writeDoc(docIndex, "docs");
   doc_labels[docIndex] = voteMajor(docIndex)
 }
 doc_label_set = names(table(doc_labels))
 
 if(dataset == "PLCouple1"){
-  for(i in 13:16){data[,i] = vector.removenoise(data[, i], 0.02);}
+  for(i in 10:18){data[,i] = vector.removenoise(data[, i], 0.02);}
 }
 if(dataset == "UBICOMP"){
   for(i in c(4:6,10:12)){data[,i] = vector.removenoise(data[, i], 0.02);}
 }
 
-
-#normalize_params = dataframe.get_normalize_param(data);
-#data = dataframe.normalize(data);
-
+if(dataset == "PLCouple1"){
+  raw_sensor_dim = 1:12;
+}
 if(dataset == "UBICOMP"){
   raw_sensor_dim = c(1, 2, 3,7, 8, 9);
-  if(extend == "fft_coe"){
-    fftnum = 5;
-    extendedFeatureCnt = featureCnt + length(raw_sensor_dim) * fftnum * 2;
-    features = c(features, paste("fft", c(1:(length(raw_sensor_dim) * fftnum * 2)), sep='_'))
-  }
-  if(extend == "fft_energy_entropy"){
-    N = length(raw_sensor_dim);
-    extendedFeatureCnt = featureCnt + N * 2;
-    features = c(features, paste("energy",c(1:N), sep='_'), paste("entropy", c(1:N), sep='_'));
-  }
 }
 
+if(extend == "fft_coe"){
+  fftnum = 5;
+  extendedFeatureCnt = featureCnt + length(raw_sensor_dim) * fftnum * 2;
+  features = c(features, paste("fft", c(1:(length(raw_sensor_dim) * fftnum * 2)), sep='_'))
+}
+if(extend == "fft_energy_entropy"){
+  N = length(raw_sensor_dim);
+  extendedFeatureCnt = featureCnt + N * 2;
+  features = c(features, paste("energy",c(1:N), sep='_'), paste("entropy", c(1:N), sep='_'));
+}
 
 doc_data_m = matrix(0,nrow = docCnt, ncol = extendedFeatureCnt)
 for(row in 1:docCnt){
@@ -157,6 +158,7 @@ iteration_doc_labels = doc_labels;
 iteration_doc_data = doc_data;
 ovid = ovid_all
 K=10
+#K = 8
 colors = c('gray','orange', 'red', 'blue',  'green',  'brown', 'cornflowerblue','pink', 'green4', 'lightcoral', 'mediumslateblue', 'navy','navajowhite', 'saddlebrown', 'gray20', 'darkgoldenrod3', 'dodgerblue', 'gold4', 'deeppink4')
 
 get_topic_distribution = function(ovid, K){
@@ -168,13 +170,25 @@ get_topic_distribution = function(ovid, K){
   return(pred);
 }
 
+
+if(FILTER_KNOWN_CLASSIFIER == TRUE){  #load classifiers and filter out known activities
+  load("iterative_desk_lying_whiteboard_desk.RData");
+  is_known_doc = is_known_doclist(iteration_doc_data, classifiers);
+  known_docs_indexes = which(is_known_doc == T)
+  iteration_doc_indexes = iteration_doc_indexes[-known_docs_indexes];
+  ovid = ovid_all[iteration_doc_indexes];
+  iteration_doc_labels = doc_labels[iteration_doc_indexes];
+  iteration_doc_data = doc_data[iteration_doc_indexes, ]
+}
+
+
 # first time segmentation by topic model
 pred = get_topic_distribution(ovid, K);
 # plot the distribution of topics
-viz_ground_truth(dataset, doc_labels);
+viz_ground_truth(dataset, iteration_doc_labels);
 viz_topic_distribution(pred, K);
 #============================= segmentation ========================================
-segmentation = mergeNeighbourActivity(pred[1:(length(interation_doc_indexes) - 5),])
+segmentation = mergeNeighbourActivity(pred[1:(length(iteration_doc_indexes) - 5),])
 visualSegmentation(segmentation)
 segLength = segmentation[2,] - segmentation[1, ]
 segmentation = rbind(segmentation, segLength)
@@ -274,8 +288,6 @@ while(TRUE){
   viz_pred_result(pred_score2, test_index, iteration_doc_labels)
   classifiers = c(classifiers, model2)
 }
-
-
 
 
 

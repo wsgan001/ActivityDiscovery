@@ -1,5 +1,11 @@
 #----------START: read file function region-------------------
 read.rawfiles = function(x){read.table(x, sep=' ')}
+
+removeTailLabel = function(labels){
+  docCnt = as.integer(length(labels) / framesInDoc);
+  x = labels[1:(docCnt * framesInDoc)];
+  return(x);
+}
 removeTail = function(x){
   docCnt = as.integer(length(x[,1]) / framesInDoc)
   x = x[1:(docCnt*framesInDoc), ]
@@ -35,6 +41,31 @@ read.ubilabel = function(configfile, filename){
   rawLabels = as.integer(rawLabels)
   combinedLabels = lapply(rawLabels, find.combined_label, ubiLabels = ubiLabels)
   return(as.integer(combinedLabels))
+}
+
+read.ubilabellist = function(configfile, filenames){
+  ubiLabelStr = readLines(configfile)
+  ubiLabelInt = 0:(length(ubiLabelStr) -1) 
+  ubiLabelCombined = ubiLabelInt
+  
+  ubiLabels = rbind(ubiLabelStr, ubiLabelInt, ubiLabelCombined)
+  walkingIndex = which(ubiLabels[1,] %in% c("walking","walking while carrying something", "walking freely"))
+  eatingIndex = which(ubiLabels[1,] %in% c("having breakfast", "having lunch", "having dinner"))
+  
+  ubiLabels[3, walkingIndex] = ubiLabels[2,which(ubiLabels[1, ] == "walking")]
+  ubiLabels[3, eatingIndex] = ubiLabels[2,which(ubiLabels[1, ] == "having breakfast")]
+  
+  rawLabelMat = lapply(filenames, readLines);
+  mergedLabels = removeTailLabel(rawLabelMat[[1]]);
+  if(length(filenames) > 1){
+    for(i in 2:length(filenames)){
+      mergedLabels = c(mergedLabels, removeTailLabel(rawLabelMat[[i]]));
+    }
+  }
+  mergedLabels = as.integer(mergedLabels)
+  combinedLabels = lapply(mergedLabels, find.combined_label, ubiLabels = ubiLabels)
+  return(as.integer(combinedLabels))
+  
 }
 
 find.combined_label = function(rawLabel,ubiLabels){ubiLabels[3,which(as.integer(ubiLabels[2, ]) == rawLabel)]}
@@ -144,21 +175,23 @@ data.fft_energy_entropy = function(dataframe){
 
 #--------------------------------------------------------------------
 viz_ground_truth = function(dataset, doc_labels){
-  plot(1, type="o", col=colors[1],xlim=c(1, length(doc_labels)), ylim=c(0, 1.5), 
-       xlab="activities", ylab="topic probability")
+  plot(1, type="o", col=colors[1],xlim=c(1, length(doc_labels) * 1.3), ylim=c(0, 1.5), 
+       xlab="motion-documents", ylab="topic probability")
   for(i in 1:length(doc_labels)){
     points(x=i, y=1.2, col=colors[which(doc_label_set==doc_labels[i])], pch=16)
   }  
+  labelPadding = as.integer(length(doc_labels) / 6);
   if(dataset == "PLCouple1"){
     labelConfig = load_labelIDConfig_plc("../../LABELID.config");
     for(i in 2:length(doc_label_set)){
-      text(50 + i%%5 * 300, 1.2+(i / 5)*0.07, labelConfig[as.integer(doc_label_set[i])], adj = c(0,0), col=colors[i]);
+      text(labelPadding/2 + i%%5 * labelPadding, 1.2+(i / 5)*0.07, labelConfig[as.integer(doc_label_set[i])], adj = c(0,0), col=colors[i]);
     } 
   }
   if(dataset == "UBICOMP"){
+    valid_label_set = doc_label_set[doc_label_set %in% doc_labels]
     labelConfig = load_labelIDConfig_ubi("activities.txt");
-    for(i in 2:length(doc_label_set)){
-      text(50 + i%%5 * 300, 1.2+(i / 5)*0.07, labelConfig[as.integer(doc_label_set[i])+1], adj = c(0,0), col=colors[i]);
+    for(i in 1:length(valid_label_set)){
+      text(labelPadding/2 + (i-1)%%5 * labelPadding, 1.3+(as.integer((i-1) / 5))*0.07, labelConfig[as.integer(valid_label_set[i])+1], adj = c(0,0), col=colors[i]);
     }
   }
 }
@@ -167,4 +200,15 @@ viz_topic_distribution = function(pred, K){
   for(i in 1:K){
     lines(pred[,i], type="o", pch=22, lty=2, col=colors[i])
   }
+}
+
+smooth_classify_tag = function(pred_class){
+  smoothed = pred_class;
+  window_size = 5;
+  threshold = 0.6;
+  for(i in 1: (length(pred_class) - window_size)){
+    window = pred_class[i:(i+window_size-1)]
+    smoothed[i + as.integer(window_size/2)] = ifelse(length(window[window==T]) >= (window_size*threshold), T, F);
+  }
+  return(smoothed);
 }
