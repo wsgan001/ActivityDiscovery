@@ -56,7 +56,7 @@ visualTargetSegmentation = function(startEndList, viz_index){
   for(i in 1:pairCnt){
     for(j in startEndList[1,i] : startEndList[2,i]){
       if(j %in% viz_index){
-        points(x = j - viz_index[1], y =1.07, col = ifelse(i%%2==0, 'gray', 'navy'), pch = 16)
+        points(x = j - viz_index[1], y =1.2, col = ifelse(i%%2==0, 'gray', 'navy'), pch = 16)
       }
       
     }

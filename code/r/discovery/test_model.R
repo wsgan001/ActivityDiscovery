@@ -14,14 +14,14 @@ if(dataset== "UBICOMP"){
 }
 
 #========================== LOAD CLASSIFIER =============================
-load("classifiers\\day1_iterative_desk_lying_whiteboard_desk.RData")  #classifiers
-load("classifiers\\day1_noramlparams.RData"); # normalize_params
+load("classifiers\\day4_desk_whiteboard_desk_pickupfood_walking_fanning.RData")  #classifiers
+load("classifiers\\day4_normalparams.RData"); # normalize_params
 
 framesInDoc = 2 * 30
 
 test_days = c(1);
-test_classifier_indexes = c(1,2, 3)
-ground_truth_activities = c(14, 25, 27)
+test_classifier_indexes = c(1,2,4,5,6)
+ground_truth_activities = c(14, 25, 26, 22,31)
 
 for(day in test_days){
   filesnames =  paste("data\\day", day, "-data.txt", sep='');
@@ -179,23 +179,23 @@ for(day in test_days){
     }
   }
   
+  raw_classes = classifyByMax(classify_results, predscore_results);
+  smoothed_classes = smoothResults(raw_classes, 15);
+  writeDiary(smoothed_classes, 15);
+  
   viz_ground_truth(dataset, doc_labels);
  
   legend(length(doc_labels) * 1.03,1.5,inset=c(0,0),c("pattern-1","pattern-2","pattern-3"),pch=c(2, 18, 4),col="black", );
   
-  pches = c(2, 18, 4, 16)
+  pches = c(2, 18, 1, 16)
+  class_colors = c('green', 'navy', 'brown', 'orange', 'pink');
    for(doc in 1:docCnt){
-     class_res = classify_results[, doc];
-     is_known = ifelse(length(class_res[class_res==T]) > 0, T, F);
-     class_colors = c('green', 'navy', 'brown');
-     if(is_known == T){
-       score = predscore_results[, doc];
-       col_index = which(score == max(score));
-       #points(x=doc, y=1 , col=class_colors[col_index], pch=16); 
-       if(doc %% 10 == 0){
-         points(x=doc, y=1 , col="black", pch=pches[col_index]); 
-       }
-     } 
+     if(raw_classes[doc] > 0){
+       points(x=doc, y=1 , col=class_colors[raw_classes[doc]], pch=16); 
+     }
+     if(smoothed_classes[doc] > 0){
+       points(x=doc, y=1.2, col=class_colors[smoothed_classes[doc]], pch=16);
+     }
    }
   
   
@@ -232,8 +232,59 @@ for(day in test_days){
   print(results);
 }
 
+classifyByMax = function(classify_results, predscore_results){
+  results = rep(-1, docCnt);
+  for(i in 1:docCnt){
+    class_res = classify_results[, i];
+    is_known = ifelse(length(class_res[class_res==T]) > 0, T, F);
+    if(is_known == T){
+      score = predscore_results[, i];
+      results[i] = which(score == max(score));
+    }
+  }
+  return(results);
+}
 
+smoothResults = function(classList, windowSize){
+  smoothed = rep(-1, length(classList));
+  len = length(classList);
+  for(i in (windowSize/2) : (len - windowSize/2 - 1)){
+    window = classList[(i - windowSize/2+1) : (i+windowSize/2)]
+    major = as.integer(names(sort(table(window),decreasing=TRUE))[1])
+    if(length(window[window==major]) >= windowSize*0.5){
+      smoothed[i] = major;
+    }
+  }
+  return(smoothed);
+}
 
+writeDiary = function(classList, minLength){
+  activity_name = c("sitting desk working", "discussing at whiteboard", "picking up mensa food", "walking", "fanning barbecue");
+  doc_time = getDocTime()
+  findActivity = F;
+  start = 0;
+  end = 0;
+  for(i in 1:docCnt){
+    if(findActivity == F){
+      if(classList[i] > 0){
+        start = i;
+        findActivity = T;
+      }
+    }else{
+      if(classList[i] != classList[start]){
+        end = i;
+        findActivity = F;
+        if(end - start >= minLength){
+          print(paste(doc_time[start], "~", doc_time[end], ",", activity_name[classList[start]]));
+        } 
+      }
+    }
+  } 
+}
 
-
+getDocTime = function(){
+  doc_num_time = rawData[c(1:docCnt) * framesInDoc, 14];
+  doc_time = as.POSIXct(doc_num_time - 8 * 60*60, origin = "1970-01-01");
+  return(doc_time);
+}
 

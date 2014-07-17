@@ -92,7 +92,7 @@ doc_labels = 1:docCnt
 file.remove(paste("docs\\", list.files("docs"), sep=''))
 for(docIndex in 1:docCnt){
   writeDoc(docIndex, "docs");
-  doc_labels[docIndex] = voteMajor(docIndex)
+  doc_labels[docIndex] = voteMajor(label[((docIndex-1)*framesInDoc+1):(docIndex*framesInDoc)])
 }
 doc_label_set = names(table(doc_labels))
 

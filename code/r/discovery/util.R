@@ -106,8 +106,8 @@ bin.equalfreq <- function(x,n){
 
 #----------START: generate doc function region-------------------
 
-voteMajor = function(docIndex){
-  frameLabels = label[((docIndex-1)*framesInDoc+1):(docIndex*framesInDoc)]
+voteMajor = function(frameLabels){
+ # frameLabels = label[((docIndex-1)*framesInDoc+1):(docIndex*framesInDoc)]
   docLabel = names(which.max(table(frameLabels))) 
   return(as.numeric(docLabel))
 }
@@ -175,23 +175,26 @@ data.fft_energy_entropy = function(dataframe){
 
 #--------------------------------------------------------------------
 viz_ground_truth = function(dataset, doc_labels){
-  plot(1, type="o", col=colors[1],xlim=c(1, length(doc_labels) * 1.3), ylim=c(0, 1.5), 
-       xlab="motion-documents", ylab="topic probability")
+  plot(1, type="o", col=colors[1],xlim=c(1, length(doc_labels) * 1.2), ylim=c(0, 2.3), 
+       xlab="motion-documents", ylab="topic probability", cex=1.2)
   for(i in 1:length(doc_labels)){
-    points(x=i, y=1.2, col=colors[which(doc_label_set==doc_labels[i])], pch=16)
+    points(x=i, y=1.4, col=colors[which(doc_label_set==doc_labels[i])], pch=16)
   }  
-  labelPadding = as.integer(length(doc_labels) / 6);
+  labelPadding = as.integer(length(doc_labels) / 4);
   if(dataset == "PLCouple1"){
     labelConfig = load_labelIDConfig_plc("../../LABELID.config");
     for(i in 2:length(doc_label_set)){
-      text(labelPadding/2 + i%%5 * labelPadding, 1.2+(i / 5)*0.07, labelConfig[as.integer(doc_label_set[i])], adj = c(0,0), col=colors[i]);
+      text(labelPadding/2 + i%%5 * labelPadding, 1.4+(i / 5)*0.07, labelConfig[as.integer(doc_label_set[i])], adj = c(0,0), col=colors[i]);
     } 
   }
   if(dataset == "UBICOMP"){
     valid_label_set = doc_label_set[doc_label_set %in% doc_labels]
     labelConfig = load_labelIDConfig_ubi("activities.txt");
+    labelConfig[10] = "having a meal";
+    labelConfig[15] = "sitting desk working";
     for(i in 1:length(valid_label_set)){
-      text(labelPadding/2 + (i-1)%%5 * labelPadding, 1.3+(as.integer((i-1) / 5))*0.07, labelConfig[as.integer(valid_label_set[i])+1], adj = c(0,0), col=colors[i]);
+      text(labelPadding/8 + (i-1)%%4 * labelPadding, 1.5+(as.integer((i-1) / 4))*0.13, labelConfig[as.integer(valid_label_set[i])+1], adj = c(0,0),
+           col=colors[which(doc_label_set == valid_label_set[i])], cex=1.3);
     }
   }
 }
