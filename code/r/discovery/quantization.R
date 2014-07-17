@@ -1,8 +1,10 @@
 
 get_quantize_threshold = function(x, n){
+   x = x[is.na(x) == F]
    len = length(x);
    x = x + rnorm(x, 0, 0.001);
-   quantie = (1:n) * as.integer(len / n) 
+   
+   quantie =  (1:n)* as.integer(len / n) 
    thres_index = which(rank(x) %in% quantie)
    thres_num = x[thres_index]
    return(sort(thres_num))
