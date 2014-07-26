@@ -5,12 +5,14 @@ source(paste(srcdir, "examples_from_tm.r", sep=''))
 source(paste(srcdir, "self-training_co-training.R", sep=''))
 
 #configurable parameters
-dataset = "UBICOMP"
+dataset = "PAMAP";
 extend = "fft_energy_entropy";
 iteration_mode = TRUE;
 FILTER_KNOWN_CLASSIFIER = FALSE;
 
-framesInDoc = 2 * 30; #30sec # 5*20
+#framesInDoc = 2 * 30; #30sec PLCouple1 + Ubicomp
+#framesInDoc = 2 * 10; #Opportunity
+framesInDoc = 20; #PAMAP
 
 if(dataset == "PLCouple1"){
   base="D:\\lessons\\motion recognition\\dataset\\PLCouple1\\sensor\\2006-08-23";
@@ -38,6 +40,28 @@ if(dataset == "UBICOMP"){
 }
 
 
+if(dataset == "OPPOTUNITY"){
+  base = "D:\\lessons\\motion recognition\\dataset\\OPPORTUNITY Activity Recognition Data Set\\OpportunityUCIDataset\\dataset";
+  setwd(base);
+  filenames = c("S1-ADL123.dat");
+  data = read_downsample.oppotunity(filenames[1]);
+  featureCnt = 12;
+  label = read_label_downsample.oppotunity(filenames[1]);
+  docCnt = as.integer(length(label) / framesInDoc);
+  label = label[1:(framesInDoc*docCnt)];
+}
+
+if(dataset == "PAMAP"){
+  base = "D:\\lessons\\motion recognition\\dataset\\PAMAP2_Dataset\\Protocol";
+  setwd(base);
+  filenames = c("subject101.dat");
+  data = read.downsample.pamap(filenames[1], 2);
+  featureCnt = 18;
+  label = read.downsample.label.pamap(filenames[1], 2);
+  docCnt = as.integer(length(label) / framesInDoc);
+  label = label[1:(framesInDoc*docCnt)];
+}
+
 #=================== read file & generate feature ==============================
 
 binned = matrix(0, length(data[,1]), featureCnt)
@@ -45,7 +69,7 @@ binned = matrix(0, length(data[,1]), featureCnt)
 #-------------START: feature generation function region-------------------
 
 
-bin.equalfreq_num = function(num, threshold){ max(which(threshold < num))}
+bin.equalfreq_num = function(num, threshold){ ifelse(num<threshold[1], 0, max(which(threshold <= num)))}
 bin.equalfreq_array = function(vec, threshold){ unlist(lapply(vec, bin.equalfreq_num, threshold=threshold));}
 
 #equal-frequency binning
@@ -68,6 +92,15 @@ if(dataset == "UBICOMP"){
   quantize_threshold = read.table("quantization.txt")
 }
 
+if(dataset == "OPPOTUNITY"){
+  quantize_threshold = read.table("quantization.txt");
+  fft_bin_threshold = read.table("fft_quantization.txt");
+}
+
+if(dataset == "PAMAP"){
+  quantize_threshold = read.table("fps2_quantization.txt");
+}
+
 for(i in 1:featureCnt){
   #binned[, i] = bin.equalfreq(data[,i],20)
   binned[, i] = bin.equalfreq_array(data[,i], quantize_threshold[,i])
@@ -85,29 +118,36 @@ if(dataset == "UBICOMP"){
                "wrist_x", "wrist_y", "wrist_z", "wrist_var_x", "wrist_var_y", "wrist_var_z");
 }
 
-
-
-#===================== generate doc =============================
-doc_labels = 1:docCnt
-file.remove(paste("docs\\", list.files("docs"), sep=''))
-for(docIndex in 1:docCnt){
-  writeDoc(docIndex, "docs");
-  doc_labels[docIndex] = voteMajor(label[((docIndex-1)*framesInDoc+1):(docIndex*framesInDoc)])
+if(dataset == "OPPOTUNITY"){
+  features = c('hip_x', 'hip_y', 'hip_z', 'wrist_x','wrist_y','wrist_z',
+              'hip_var_x', 'hip_var_y', 'hip_var_z', 'wrist_var_x','wrist_var_y','wrist_var_z');
+  
 }
-doc_label_set = names(table(doc_labels))
 
+if(dataset == "PAMAP"){
+  features = c('hip_x', 'hip_y', 'hip_z', 'hand_x', 'hand_y', 'hand_z', 'ankle_x', 'ankle_y', 'ankle_z',
+               'hip_var_x', 'hip_var_y', 'hip_var_z', 'hand_var_x', 'hand_var_y', 'hand_var_z',
+               'ankle_var_x', 'ankle_var_y', 'ankle_var_z');
+  
+}
+
+doc_features = features;
 if(dataset == "PLCouple1"){
   for(i in 10:18){data[,i] = vector.removenoise(data[, i], 0.02);}
-}
-if(dataset == "UBICOMP"){
-  for(i in c(4:6,10:12)){data[,i] = vector.removenoise(data[, i], 0.02);}
-}
-
-if(dataset == "PLCouple1"){
   raw_sensor_dim = 1:12;
 }
 if(dataset == "UBICOMP"){
+  for(i in c(4:6,10:12)){data[,i] = vector.removenoise(data[, i], 0.02);}
   raw_sensor_dim = c(1, 2, 3,7, 8, 9);
+}
+
+if(dataset == "OPPOTUNITY"){
+  for(i in 1:12){data[,i] = vector.removenoise(data[, i], 0.02);}
+  raw_sensor_dim = 1:6;
+}
+if(dataset == "PAMAP"){
+  for(i in 10:18){data[,i] = vector.removenoise(data[, i], 0.02);}
+  raw_sensor_dim = 1:9;
 }
 
 if(extend == "fft_coe"){
@@ -139,11 +179,43 @@ doc_data = data.frame(doc_data_m)
 normalize_params = dataframe.get_normalize_param(doc_data);
 doc_data = dataframe.normalize(doc_data);
 
-#================= visualize topic distribution =============================
 
+#================= mean and var in other length =================
+
+
+#======================== fft word in doc =======================
+fft_word_num = 10;
+fft_params = matrix(0, nrow = docCnt, ncol = fft_word_num * length(raw_sensor_dim));
+for(row in 1:docCnt){
+  frameRows = ((row-1)*framesInDoc+1):(row*framesInDoc);
+  fft_params[row, ] = data.fft(data.frame(data[frameRows, raw_sensor_dim]), fft_word_num / 2);    
+}
+binned_fft = matrix(0, nrow = docCnt, ncol = fft_word_num * length(raw_sensor_dim));
+for(i in 1:length(fft_params[1,])){
+  binned_fft[, i] = bin.equalfreq_array(fft_params[,i], fft_bin_threshold[,i])
+}
+get_fft_feature_names = function(colname, fft_word_num){
+  return(paste(colname, 'fft', c(1:fft_word_num), sep='_'));
+}
+fft_doc_feature_names = unlist(lapply(c('hip_x', 'hip_y', 'hip_z', 'rwr_x', 'rwr_y', 'rwr_z'), get_fft_feature_names, fft_word_num= fft_word_num));
+
+
+#===================== generate doc =============================
+doc_labels = 1:docCnt
+file.remove(paste("docs\\", list.files("docs"), sep=''))
+for(docIndex in 1:docCnt){
+  #writeDoc(docIndex, "docs");
+  doc_labels[docIndex] = voteMajor(label[((docIndex-1)*framesInDoc+1):(docIndex*framesInDoc)])
+  frame_words = data_toString(doc_features, binned[((docIndex-1)*framesInDoc+1):(docIndex*framesInDoc),] );
+  #fft_words = data_toString(fft_doc_feature_names,matrix(binned_fft[docIndex,],nrow=1))
+  #write_doc(paste(frame_words, fft_words,fft_words,fft_words,fft_words, sep=" "), 'docs', paste(docIndex, '_', doc_labels[docIndex], '.txt', sep=""));
+  write_doc(frame_words, 'docs', paste(docIndex, '_', doc_labels[docIndex], '.txt', sep=""));
+}
+doc_label_set = names(table(doc_labels))
 
 # topic model
 
+#================= visualize topic distribution =============================
 
 library(topicmodels)
 library(tm)
@@ -157,8 +229,8 @@ iteration_doc_indexes = all_doc_indexes;
 iteration_doc_labels = doc_labels;
 iteration_doc_data = doc_data;
 ovid = ovid_all
-K=10
-#K = 8
+#K=10 # UBICOMP
+K = 8
 colors = c('gray','orange', 'red', 'blue',  'green',  'brown', 'cornflowerblue','pink', 'green4', 'lightcoral', 'mediumslateblue', 'navy','navajowhite', 'saddlebrown', 'gray20', 'darkgoldenrod3', 'dodgerblue', 'gold4', 'deeppink4')
 
 get_topic_distribution = function(ovid, K){

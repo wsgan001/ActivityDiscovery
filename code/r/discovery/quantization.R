@@ -48,6 +48,8 @@ if(dataset == "UBICOMP"){
 bin_size = 20;
 threshold_matrix = matrix(0, nrow = bin_size, ncol=col_cnt)
 
+
+
 for(i in 1:col_cnt){
   threshold_matrix[,i] = get_quantize_threshold(data[,i], bin_size)
   threshold_matrix[,i] = as.numeric(format(round(threshold_matrix[,i], 2), nsmall = 2))

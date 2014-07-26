@@ -22,6 +22,119 @@ read.files = function(filenames){
   
   return(merged)
 }
+
+read.data.oppotunity = function(filename){
+  data = read.table(filename, sep=" ");
+  hip_x = interporlate_nan(data$V5);
+  hip_y = interporlate_nan(data$V6);
+  hip_z = interporlate_nan(data$V7);
+  
+  rwr_x = interporlate_nan(data$V23);
+  rwr_y = interporlate_nan(data$V24);
+  rwr_z = interporlate_nan(data$V25);
+  accel_data = data.frame(hip_x, hip_y, hip_z, rwr_x, rwr_y, rwr_z);
+  
+  return(accel_data);
+}
+
+interporlate_nan = function(vec){
+  na_index = c(which(is.na(vec)), length(vec));
+  is_start = FALSE;
+  ptr = 0;
+  start = -1;
+  for(i in na_index){
+    if(i != ptr + 1){
+      end = ptr;
+      if(start > 0){
+        vec[start:end] = (vec[start - 1] + vec[end+1]) /2;
+      }
+      start = i;
+    }
+    ptr = i;
+  }
+  return(vec);
+  
+}
+
+downsample = function(data, raw_fps, target_fps){
+  compress_ratio = raw_fps / target_fps;
+  col_cnt = length(data[1,])
+  
+  target_frame_cnt = as.integer(length(data[,1]) / compress_ratio);
+  target_frame_data = matrix(0, nrow = target_frame_cnt, ncol = col_cnt * 2);
+  
+  for(i in 1:target_frame_cnt){
+    for(col in 1:col_cnt){
+      start = (i - 1) * compress_ratio + 1;
+      end = i * compress_ratio;
+      target_frame_data[i, col] = mean(data[start:end, col]);
+      target_frame_data[i, col + col_cnt] = sd(data[start:end, col]);    
+    }
+  }
+  return(target_frame_data);  
+}
+
+read_downsample.oppotunity = function(filename){
+  raw_accel_data = read.data.oppotunity(filename);
+  downsampled_data = downsample(raw_accel_data, 30, 2);
+  return(downsampled_data);
+}
+
+read_label_downsample.oppotunity = function(filename){
+  data = read.table(filename, sep=" ");
+  hllabels = data$V245;
+  raw_fps = 30;
+  target_fps = 2;
+  compress_ratio = raw_fps / target_fps;
+  
+  target_frame_cnt = as.integer(length(data[,1]) / compress_ratio);
+  
+  downsampled_labels = rep(0, target_frame_cnt);
+  for(i in 1:target_frame_cnt){
+    downsampled_labels[i] = voteMajor(hllabels[((i-1)*compress_ratio+1):(i*compress_ratio)]);
+  }
+  return(downsampled_labels);
+}
+
+read.data.pamap = function(filename){
+  data = read.table(filename, sep=' ');
+  hand_x = interporlate_nan(data$V5);
+  hand_y = interporlate_nan(data$V6);
+  hand_z = interporlate_nan(data$V7);
+  chest_x = interporlate_nan(data$V22);
+  chest_y = interporlate_nan(data$V23);
+  chest_z = interporlate_nan(data$V24);
+  ankle_x = interporlate_nan(data$V39);
+  ankle_y = interporlate_nan(data$V40);
+  ankle_z = interporlate_nan(data$V41);
+  
+  accel_data = data.frame(hand_x, hand_y, hand_z, chest_x, chest_y, chest_z,
+                          ankle_x, ankle_y, ankle_z);
+  return(accel_data);
+}
+
+read.downsample.pamap = function(file, target_fps){
+  data = read.data.pamap(file);
+  fps1 = downsample(data, 100, target_fps);
+  return(fps1);
+}
+
+read.downsample.label.pamap = function(file, target_fps){
+  data = read.table(file, sep=' ')
+  hllabels = data$V2;
+  raw_fps = 100;
+#  target_fps = 1;
+  compress_ratio = raw_fps / target_fps;
+  
+  target_frame_cnt = as.integer(length(data[,1]) / compress_ratio);
+  
+  downsampled_labels = rep(0, target_frame_cnt);
+  for(i in 1:target_frame_cnt){
+    downsampled_labels[i] = voteMajor(hllabels[((i-1)*compress_ratio+1):(i*compress_ratio)]);
+  }
+  return(downsampled_labels);
+}
+
 #-----------END: read file function region-------------------
 
 #------------START: READ UBICOMP LABEL ------------------------
@@ -64,11 +177,20 @@ read.ubilabellist = function(configfile, filenames){
   }
   mergedLabels = as.integer(mergedLabels)
   combinedLabels = lapply(mergedLabels, find.combined_label, ubiLabels = ubiLabels)
-  return(as.integer(combinedLabels))
-  
+  return(as.integer(combinedLabels))  
 }
 
 find.combined_label = function(rawLabel,ubiLabels){ubiLabels[3,which(as.integer(ubiLabels[2, ]) == rawLabel)]}
+
+viz_xyz = function(data){
+  data_min = min(min(data[,1]), min(data[,2]), min(data[,3]));
+  data_max = max(max(data[,1]), max(data[,2]), max(data[,3]));
+  plot(data[,1], ylim = c(data_min, data_max), type='n');
+  lines(data[,1], col = 'red');
+  lines(data[,2], col = 'green');
+  lines(data[,3], col = 'blue');
+  return();
+}
 
 #--------------END: READ UBICOMP LABEL------------------------
 
@@ -121,6 +243,20 @@ writeDoc = function(docIndex, dir){
   docLabel = voteMajor(docIndex);
   write(docStr, file=paste(dir, "\\doc_", docIndex, "_", docLabel, ".txt", sep=""));
 }
+
+data_toString = function(colnames, data){
+  str = "";
+  for(i in 1:length(data[,1])){
+    linestr = toString(paste(colnames, binned[((docIndex-1)*framesInDoc+i),], sep='_'), sep=' ');
+    str = paste(str, paste(linestr, ",", sep=""), sep="")
+  }
+  return(str);
+}
+
+write_doc = function(strdata, dir, filename){
+  write(strdata, file = paste(dir, filename, sep="\\"));
+}
+
 #----------END: generate doc function region-------------------
 
 

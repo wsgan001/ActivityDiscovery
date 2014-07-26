@@ -46,7 +46,7 @@ visualSegmentation = function(startEndList){
   pairCnt = length(startEndList[1,])
   for(i in 1:pairCnt){
     for(j in startEndList[1,i] : startEndList[2,i]){
-      points(x = j, y = 0.07, col = ifelse(i%%2==0, 'gray', 'navy'), pch = 16)
+      points(x = j, y = 1.2, col = ifelse(i%%2==0, 'gray', 'navy'), pch = 16)
     }
   }
 }

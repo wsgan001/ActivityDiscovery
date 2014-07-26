@@ -11,7 +11,30 @@ read.data.oppotunity = function(filename){
   rwr_y = data$V24;
   rwr_z = data$V25;
   accel_data = data.frame(hip_x, hip_y, hip_z, rwr_x, rwr_y, rwr_z);
+  for(i in 1:length(data[1,])){
+    data[, i] = interporlate_nan(data[, i]);
+  }
+  
   return(accel_data);
+}
+
+interporlate_nan = function(vec){
+  na_index = c(which(is.na(vec)), length(vec));
+  is_start = FALSE;
+  ptr = 0;
+  start = -1;
+  for(i in na_index){
+    if(i != ptr + 1){
+      end = ptr;
+      if(start > 0){
+        vec[start:end] = (vec[start - 1] + vec[end+1]) /2;
+      }
+      start = i;
+    }
+    ptr = i;
+  }
+  return(vec);
+  
 }
 
 downsample = function(data, raw_fps, target_fps){
@@ -41,22 +64,43 @@ files = dir();
 files = files[substr(files, nchar(files)-3+1, nchar(files)) == "dat"]
 
 
-data = lapply(files[1:10], read_downsample.oppotunity);
+data = lapply(files[c(1,8,15,22)], read_downsample.oppotunity);
 
 merged = data[[1]];
 for(i in 2:length(data)){
   merged = rbind(merged, data[[i]]);
 }
 
+#original data binning
 
-bin_size = 20;
-col_cnt = 12;
-threshold_matrix = matrix(0.0, nrow = bin_size, ncol=col_cnt)
-
-for(i in 1:col_cnt){
-  threshold_matrix[,i] = get_quantize_threshold(merged[,i], bin_size)
-  threshold_matrix[,i] = as.numeric(format(round(threshold_matrix[,i], 2), nsmall = 2))
+bin.data = function(data, bin_size){
+  col_cnt = length(data[1,]);
+  threshold_matrix = matrix(0.0, nrow = bin_size, ncol=col_cnt)
+  
+  for(i in 1:col_cnt){
+    threshold_matrix[,i] = get_quantize_threshold(data[,i], bin_size)
+    threshold_matrix[,i] = as.numeric(format(round(threshold_matrix[,i], 2), nsmall = 2))
+  }
+  return(threshold_matrix);
 }
 
+original_threshold_matrix = bin.data(merged, 20);
+write.table(original_threshold_matrix, file="quantization.txt")
 
-write.table(threshold_matrix, file=paste(base, "quantization.txt", sep=''))
+#fft data binning
+cal_fft_params = function(data, cols){
+  framesInDoc = 20;
+  fft_num = 5;
+  docCnt = as.integer(length(data[,1]) / framesInDoc);
+  fft_params = matrix(0, nrow = docCnt, ncol = fft_num * 2 * length(cols));
+  
+  for(row in 1:docCnt){
+    frameRows = ((row-1)*framesInDoc+1):(row*framesInDoc);
+    fft_params[row, ] = data.fft(data.frame(data[frameRows, cols]), fft_num);  
+  }
+  return(fft_params);
+}
+
+fft_data = cal_fft_params(merged, 1:6);
+fft_threshold_matrix = bin.data(fft_data, 20);
+write.table(fft_threshold_matrix, file="fft_quantization.txt");
