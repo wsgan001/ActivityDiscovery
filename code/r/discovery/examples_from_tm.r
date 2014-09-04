@@ -70,7 +70,7 @@ sampleNegExamples = function(targetSegIndex, segmentation, diffThreshold){
     topicDistDiff = get_period_topic_differnce(targetTopicMean, topicMean);
     if(topicDistDiff > diffThreshold){ # a different model
       sampleMaxCnt = min(maxPosCnt * 0.3, (segmentation[2, i] - segmentation[1, i])*0.5);
-      sampleCnt = as.integer(sampleMaxCnt * topicDistDiff*0.3);
+      sampleCnt = as.integer(sampleMaxCnt * topicDistDiff*0.7);
       sampleIndex = sample(segmentation[1, i]:segmentation[2, i], sampleCnt);
       negFrameIndex = union(negFrameIndex, sampleIndex)
     }

@@ -13,15 +13,20 @@ if(dataset== "UBICOMP"){
   setwd(base);
 }
 
+if(dataset == "PAMAP"){
+  base = "D:\\lessons\\motion recognition\\dataset\\PAMAP2_Dataset\\Protocol";
+  setwd(base);
+}
+
 #========================== LOAD CLASSIFIER =============================
-load("classifiers\\day4_desk_whiteboard_desk_pickupfood_walking_fanning.RData")  #classifiers
-load("classifiers\\day4_normalparams.RData"); # normalize_params
+load("sub102_iron_unknown_walking_sitting_lying.R")  #classifiers
+#load("classifiers\\day4_normalparams.RData"); # normalize_params
 
 framesInDoc = 2 * 30
 
 test_days = c(1);
-test_classifier_indexes = c(1,2,4,5,6)
-ground_truth_activities = c(14, 25, 26, 22,31)
+test_classifier_indexes = c(1, 3,4,5)
+ground_truth_activities = c(17, 4, 2,1)
 
 for(day in test_days){
   filesnames =  paste("data\\day", day, "-data.txt", sep='');
@@ -55,6 +60,16 @@ for(day in test_days){
     
     for(i in c(4:6,10:12)){data[,i] = vector.removenoise(data[, i], 0.02);}
   }
+  if(dataset == "PAMAP"){
+    filename = "subject102.dat"
+    data = read.downsample.pamap(filename, 2);
+    featureCnt = 18;
+    label = read.downsample.label.pamap(filename, 2);
+    docCnt = as.integer(length(label) / framesInDoc);
+    label = label[1:(framesInDoc*docCnt)];
+  }
+  
+  
   docCnt = as.integer(length(label) / framesInDoc)
   
   extend = "fft_energy_entropy";
@@ -72,6 +87,16 @@ for(day in test_days){
     }
   }
   
+  if(dataset == "PAMAP"){
+    features = c('hip_x', 'hip_y', 'hip_z', 'hand_x', 'hand_y', 'hand_z', 'ankle_x', 'ankle_y', 'ankle_z',
+                 'hip_var_x', 'hip_var_y', 'hip_var_z', 'hand_var_x', 'hand_var_y', 'hand_var_z',
+                 'ankle_var_x', 'ankle_var_y', 'ankle_var_z');
+    raw_sensor_dim = c(1:9);
+    N = length(raw_sensor_dim);
+    extendedFeatureCnt = featureCnt + N * 2;
+    features = c(features, paste("energy",c(1:N), sep='_'), paste("entropy", c(1:N), sep='_'));
+  }
+  
   doc_data_m = matrix(0,nrow = docCnt, ncol = extendedFeatureCnt)
   for(row in 1:docCnt){
     for(col in 1:length(data[1,])){
@@ -87,13 +112,13 @@ for(day in test_days){
   }
   
   
-  
+  doc_data_m =  dataframe.normalize(doc_data_m);
   
   #===================== generate doc label =============================
   docCnt = length(data[,1]) / framesInDoc
   doc_labels = 1:docCnt
   for(docIndex in 1:docCnt){
-    doc_labels[docIndex] = voteMajor(docIndex)
+    doc_labels[docIndex] = voteMajor(label[((docIndex-1)*framesInDoc+1):(docIndex*framesInDoc)])
   }
   doc_label_set = names(table(doc_labels))
   
@@ -106,16 +131,18 @@ for(day in test_days){
   
   
   test_x = data.frame(doc_data_m)
-  for(i in 1:extendedFeatureCnt){
-    test_x[, i] = (test_x[, i] - normalize_params[1,i]) / ifelse(normalize_params[2,i] == 0, 1, normalize_params[2,i]);
-  }
+ # for(i in 1:extendedFeatureCnt){
+#    test_x[, i] = (test_x[, i] - normalize_params[1,i]) / ifelse(normalize_params[2,i] == 0, 1, normalize_params[2,i]);
+  #}
   
-  test_x = dataframe.normalize(test_x);
+#  test_x = dataframe.normalize(test_x);
   colnames(test_x) = features;
   
   
   #================= visualize topic distribution =============================
-  colors = c('gray','orange', 'red', 'blue',  'green',  'brown', 'cornflowerblue','pink', 'green4', 'lightcoral', 'mediumslateblue', 'navy','navajowhite', 'saddlebrown', 'gray20', 'darkgoldenrod3', 'dodgerblue', 'gold4', 'deeppink4')
+  colors = c('gray','orange', 'red', 'blue',  'green',  'brown', 'cornflowerblue',
+             'pink', 'green4', 'lightcoral', 'mediumslateblue', 'navy','saddlebrown','navajowhite',
+              'gray20', 'darkgoldenrod3', 'dodgerblue', 'gold4', 'deeppink4')
   
   viz_ground_truth(dataset, doc_labels);
   

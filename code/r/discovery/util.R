@@ -206,6 +206,12 @@ load_labelIDConfig_ubi = function(configfile){
   return(labelIDConfig)
 }
 
+load_labelIDConfig_pamap = function(configfile){
+  labelIDConfig = readLines(configfile)
+  return(labelIDConfig)
+}
+
+
 #-------------START: feature generation function region-------------------
 
 
@@ -333,11 +339,20 @@ viz_ground_truth = function(dataset, doc_labels){
            col=colors[which(doc_label_set == valid_label_set[i])], cex=1.3);
     }
   }
+  if(dataset == 'PAMAP'){
+    valid_label_set = as.integer(names(table(doc_labels)));
+    labelConfig = load_labelIDConfig_pamap("activities.txt");
+    for(i in 1:length(valid_label_set)){
+      text(labelPadding/8 + (i-1)%%4 * labelPadding, 1.6+(as.integer((i-1) / 4))*0.13, labelConfig[as.integer(valid_label_set[i])+1], adj = c(0,0),
+           col=colors[which(doc_label_set == valid_label_set[i])], cex=1.3);
+    }
+  }
 }
 
 viz_topic_distribution = function(pred, K){
   for(i in 1:K){
-    lines(pred[,i], type="o", pch=22, lty=2, col=colors[i])
+    #lines(pred[,i], type="o", pch=22, lty=2, col=colors[i])
+    lines(pred[,i], type="o", lty=2, col=colors[i])
   }
 }
 
@@ -350,4 +365,13 @@ smooth_classify_tag = function(pred_class){
     smoothed[i + as.integer(window_size/2)] = ifelse(length(window[window==T]) >= (window_size*threshold), T, F);
   }
   return(smoothed);
+}
+
+plot_data = function(data){
+  min = min(min(data[,1]), min(data[,2]), min(data[,3]));
+  max = max(max(data[,1]), max(data[,2]), max(data[,3]));
+  plot(data[,1], ylim = c(min, max), type='n')
+  lines(data[,1], col='red');
+  lines(data[,2], col='green');
+  lines(data[,3], col='blue');
 }

@@ -5,14 +5,14 @@ source(paste(srcdir, "examples_from_tm.r", sep=''))
 source(paste(srcdir, "self-training_co-training.R", sep=''))
 
 #configurable parameters
-dataset = "PAMAP";
+dataset = "UBICOMP";
 extend = "fft_energy_entropy";
 iteration_mode = TRUE;
 FILTER_KNOWN_CLASSIFIER = FALSE;
 
-#framesInDoc = 2 * 30; #30sec PLCouple1 + Ubicomp
+framesInDoc = 2 * 30; #30sec PLCouple1 + Ubicomp
 #framesInDoc = 2 * 10; #Opportunity
-framesInDoc = 20; #PAMAP
+#framesInDoc = 20; #PAMAP
 
 if(dataset == "PLCouple1"){
   base="D:\\lessons\\motion recognition\\dataset\\PLCouple1\\sensor\\2006-08-23";
@@ -34,7 +34,7 @@ if(dataset == "UBICOMP"){
   data = rawData[,1:12]
   featureCnt = 12; 
   #read label
-  label = read.ubilabel("activities.txt", "label\\day1-activities.txt")
+  label = read.ubilabel("activities.txt", "label\\day2-activities.txt")
   docCnt = as.integer(length(label) / framesInDoc)
   label = label[1:(framesInDoc*docCnt)]
 }
@@ -54,7 +54,7 @@ if(dataset == "OPPOTUNITY"){
 if(dataset == "PAMAP"){
   base = "D:\\lessons\\motion recognition\\dataset\\PAMAP2_Dataset\\Protocol";
   setwd(base);
-  filenames = c("subject101.dat");
+  filenames = c("subject102.dat");
   data = read.downsample.pamap(filenames[1], 2);
   featureCnt = 18;
   label = read.downsample.label.pamap(filenames[1], 2);
@@ -206,10 +206,10 @@ file.remove(paste("docs\\", list.files("docs"), sep=''))
 for(docIndex in 1:docCnt){
   #writeDoc(docIndex, "docs");
   doc_labels[docIndex] = voteMajor(label[((docIndex-1)*framesInDoc+1):(docIndex*framesInDoc)])
-  frame_words = data_toString(doc_features, binned[((docIndex-1)*framesInDoc+1):(docIndex*framesInDoc),] );
+  #frame_words = data_toString(doc_features, binned[((docIndex-1)*framesInDoc+1):(docIndex*framesInDoc),] );
   #fft_words = data_toString(fft_doc_feature_names,matrix(binned_fft[docIndex,],nrow=1))
   #write_doc(paste(frame_words, fft_words,fft_words,fft_words,fft_words, sep=" "), 'docs', paste(docIndex, '_', doc_labels[docIndex], '.txt', sep=""));
-  write_doc(frame_words, 'docs', paste(docIndex, '_', doc_labels[docIndex], '.txt', sep=""));
+  #write_doc(frame_words, 'docs', paste(docIndex, '_', doc_labels[docIndex], '.txt', sep=""));
 }
 doc_label_set = names(table(doc_labels))
 
@@ -219,6 +219,7 @@ doc_label_set = names(table(doc_labels))
 
 library(topicmodels)
 library(tm)
+
 ovid_all <- Corpus(DirSource(paste(base, "\\docs", sep="")),readerControl = list(language = "lat"))
 
 #init all the values
@@ -230,8 +231,11 @@ iteration_doc_labels = doc_labels;
 iteration_doc_data = doc_data;
 ovid = ovid_all
 #K=10 # UBICOMP
-K = 8
-colors = c('gray','orange', 'red', 'blue',  'green',  'brown', 'cornflowerblue','pink', 'green4', 'lightcoral', 'mediumslateblue', 'navy','navajowhite', 'saddlebrown', 'gray20', 'darkgoldenrod3', 'dodgerblue', 'gold4', 'deeppink4')
+K = 6
+colors = c('gray','orange', 'red', 'blue',  'green',  'brown', 'cornflowerblue','pink', 'green4', 
+           'lightcoral', 'mediumslateblue', 'navy','navajowhite', 'saddlebrown', 'gray20', 
+           'darkgoldenrod3', 'dodgerblue', 'gold4', 'deeppink4', 'deeppink1', 'goldenrod2', 'gray26', 
+           'greenyellow', 'lightgoldenrod4', 'mediumvioletred', 'salmon4')
 
 get_topic_distribution = function(ovid, K){
   dtm <- DocumentTermMatrix(ovid,control=list(wordLengths=c(1,Inf)))
@@ -260,7 +264,8 @@ pred = get_topic_distribution(ovid, K);
 viz_ground_truth(dataset, iteration_doc_labels);
 viz_topic_distribution(pred, K);
 #============================= segmentation ========================================
-segmentation = mergeNeighbourActivity(pred[1:(length(iteration_doc_indexes) - 5),])
+segmentation = mergeNeighbourActivity(pred[,])
+#segmentation = mergeNeighbourSeg(segmentation)
 visualSegmentation(segmentation)
 segLength = segmentation[2,] - segmentation[1, ]
 segmentation = rbind(segmentation, segLength)
@@ -304,7 +309,7 @@ while(TRUE){
   posTrainIndex = samplePosExamples(longSegIndex, segmentation)
   topicDiffThreshold = 1.5
   negTrainIndex = sampleNegExamples(longSegIndex, segmentation, topicDiffThreshold)
-  while(length(negTrainIndex) < length(posTrainIndex)){
+  while(length(negTrainIndex) < max(100,length(posTrainIndex))){
     topicDiffThreshold = topicDiffThreshold - 0.1;
     negTrainIndex = sampleNegExamples(longSegIndex, segmentation, topicDiffThreshold)
   }
