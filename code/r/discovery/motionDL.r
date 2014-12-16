@@ -3,6 +3,7 @@ source(paste(srcdir, "util.R", sep=''))
 source(paste(srcdir, "segmentation.R", sep=''))
 source(paste(srcdir, "examples_from_tm.r", sep=''))
 source(paste(srcdir, "self-training_co-training.R", sep=''))
+source(paste(srcdir, "feature_factory.R", sep=''))
 
 #configurable parameters
 dataset = "UBICOMP";
@@ -34,7 +35,7 @@ if(dataset == "UBICOMP"){
   data = rawData[,1:12]
   featureCnt = 12; 
   #read label
-  label = read.ubilabel("activities.txt", "label\\day2-activities.txt")
+  label = read.ubilabel("activities.txt", "label\\day1-activities.txt")
   docCnt = as.integer(length(label) / framesInDoc)
   label = label[1:(framesInDoc*docCnt)]
 }
@@ -206,10 +207,10 @@ file.remove(paste("docs\\", list.files("docs"), sep=''))
 for(docIndex in 1:docCnt){
   #writeDoc(docIndex, "docs");
   doc_labels[docIndex] = voteMajor(label[((docIndex-1)*framesInDoc+1):(docIndex*framesInDoc)])
-  #frame_words = data_toString(doc_features, binned[((docIndex-1)*framesInDoc+1):(docIndex*framesInDoc),] );
+  frame_words = data_toString(doc_features, binned[((docIndex-1)*framesInDoc+1):(docIndex*framesInDoc),] );
   #fft_words = data_toString(fft_doc_feature_names,matrix(binned_fft[docIndex,],nrow=1))
   #write_doc(paste(frame_words, fft_words,fft_words,fft_words,fft_words, sep=" "), 'docs', paste(docIndex, '_', doc_labels[docIndex], '.txt', sep=""));
-  #write_doc(frame_words, 'docs', paste(docIndex, '_', doc_labels[docIndex], '.txt', sep=""));
+  write_doc(frame_words, 'docs', paste(docIndex, '_', doc_labels[docIndex], '.txt', sep=""));
 }
 doc_label_set = names(table(doc_labels))
 
@@ -307,7 +308,7 @@ while(TRUE){
   knownSegIndexes = c(knownSegIndexes, longSegIndex)
   
   posTrainIndex = samplePosExamples(longSegIndex, segmentation)
-  topicDiffThreshold = 1.5
+  topicDiffThreshold = 1.2
   negTrainIndex = sampleNegExamples(longSegIndex, segmentation, topicDiffThreshold)
   while(length(negTrainIndex) < max(100,length(posTrainIndex))){
     topicDiffThreshold = topicDiffThreshold - 0.1;

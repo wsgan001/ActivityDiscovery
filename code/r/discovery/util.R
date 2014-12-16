@@ -370,7 +370,7 @@ smooth_classify_tag = function(pred_class){
 plot_data = function(data){
   min = min(min(data[,1]), min(data[,2]), min(data[,3]));
   max = max(max(data[,1]), max(data[,2]), max(data[,3]));
-  plot(data[,1], ylim = c(min, max), type='n')
+  plot(data[,1], ylim = c(min, max), type='n', xlab="time", ylab="acceleration data")
   lines(data[,1], col='red');
   lines(data[,2], col='green');
   lines(data[,3], col='blue');
