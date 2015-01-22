@@ -1,17 +1,21 @@
 #----------START: read file function region-------------------
 read.rawfiles = function(x){read.table(x, sep=' ')}
 
+#remove tail labels
 removeTailLabel = function(labels){
   docCnt = as.integer(length(labels) / framesInDoc);
   x = labels[1:(docCnt * framesInDoc)];
   return(x);
 }
+
+#remove tail data
 removeTail = function(x){
   docCnt = as.integer(length(x[,1]) / framesInDoc)
   x = x[1:(docCnt*framesInDoc), ]
   return(x)
 }
 
+#read a list of data with filename list and merged them into a big matrix
 read.files = function(filenames){
   rawData = lapply(filenames, read.rawfiles)
   rawData = lapply(rawData, removeTail)
@@ -23,6 +27,7 @@ read.files = function(filenames){
   return(merged)
 }
 
+# read opportunity dataset
 read.data.oppotunity = function(filename){
   data = read.table(filename, sep=" ");
   hip_x = interporlate_nan(data$V5);
@@ -37,6 +42,7 @@ read.data.oppotunity = function(filename){
   return(accel_data);
 }
 
+# move NAN in raw data by interpolation
 interporlate_nan = function(vec){
   na_index = c(which(is.na(vec)), length(vec));
   is_start = FALSE;
@@ -56,6 +62,7 @@ interporlate_nan = function(vec){
   
 }
 
+# downsample the data from raw_fps to target_fps
 downsample = function(data, raw_fps, target_fps){
   compress_ratio = raw_fps / target_fps;
   col_cnt = length(data[1,])
@@ -74,12 +81,14 @@ downsample = function(data, raw_fps, target_fps){
   return(target_frame_data);  
 }
 
+# read data from opportunity dataset and downsample to 2Hz
 read_downsample.oppotunity = function(filename){
   raw_accel_data = read.data.oppotunity(filename);
   downsampled_data = downsample(raw_accel_data, 30, 2);
   return(downsampled_data);
 }
 
+# read labels from opportunity dataset and downsample to 2Hz
 read_label_downsample.oppotunity = function(filename){
   data = read.table(filename, sep=" ");
   hllabels = data$V245;
@@ -96,6 +105,7 @@ read_label_downsample.oppotunity = function(filename){
   return(downsampled_labels);
 }
 
+#read data from pamap dataset
 read.data.pamap = function(filename){
   data = read.table(filename, sep=' ');
   hand_x = interporlate_nan(data$V5);
@@ -113,12 +123,14 @@ read.data.pamap = function(filename){
   return(accel_data);
 }
 
+#read data from pamap dataset and downsample it
 read.downsample.pamap = function(file, target_fps){
   data = read.data.pamap(file);
   fps1 = downsample(data, 100, target_fps);
   return(fps1);
 }
 
+#read label from pamap dataset and downsample it
 read.downsample.label.pamap = function(file, target_fps){
   data = read.table(file, sep=' ')
   hllabels = data$V2;
@@ -135,10 +147,9 @@ read.downsample.label.pamap = function(file, target_fps){
   return(downsampled_labels);
 }
 
-#-----------END: read file function region-------------------
-
-#------------START: READ UBICOMP LABEL ------------------------
-read.ubilabel = function(configfile, filename){
+#read labels from ubicomp08 dataset
+#note: we merge three having meal classes into one, and three walking classes into one
+read.ubilabel = function(filename, configfile){
   ubiLabelStr = readLines(configfile)
   ubiLabelInt = 0:(length(ubiLabelStr) -1) 
   ubiLabelCombined = ubiLabelInt
@@ -156,32 +167,14 @@ read.ubilabel = function(configfile, filename){
   return(as.integer(combinedLabels))
 }
 
-read.ubilabellist = function(configfile, filenames){
-  ubiLabelStr = readLines(configfile)
-  ubiLabelInt = 0:(length(ubiLabelStr) -1) 
-  ubiLabelCombined = ubiLabelInt
-  
-  ubiLabels = rbind(ubiLabelStr, ubiLabelInt, ubiLabelCombined)
-  walkingIndex = which(ubiLabels[1,] %in% c("walking","walking while carrying something", "walking freely"))
-  eatingIndex = which(ubiLabels[1,] %in% c("having breakfast", "having lunch", "having dinner"))
-  
-  ubiLabels[3, walkingIndex] = ubiLabels[2,which(ubiLabels[1, ] == "walking")]
-  ubiLabels[3, eatingIndex] = ubiLabels[2,which(ubiLabels[1, ] == "having breakfast")]
-  
-  rawLabelMat = lapply(filenames, readLines);
-  mergedLabels = removeTailLabel(rawLabelMat[[1]]);
-  if(length(filenames) > 1){
-    for(i in 2:length(filenames)){
-      mergedLabels = c(mergedLabels, removeTailLabel(rawLabelMat[[i]]));
-    }
-  }
-  mergedLabels = as.integer(mergedLabels)
-  combinedLabels = lapply(mergedLabels, find.combined_label, ubiLabels = ubiLabels)
-  return(as.integer(combinedLabels))  
+#read labels from ubicomp08 dataset from a list of files, and merge the labels into a list
+read.ubilabellist = function(filenames, configfile){
+  unlist(lapply(filenames, read.ubilabel, configfile=configfile))
 }
 
 find.combined_label = function(rawLabel,ubiLabels){ubiLabels[3,which(as.integer(ubiLabels[2, ]) == rawLabel)]}
 
+# visualize a 3D (x, y, z)-time matrix
 viz_xyz = function(data){
   data_min = min(min(data[,1]), min(data[,2]), min(data[,3]));
   data_max = max(max(data[,1]), max(data[,2]), max(data[,3]));
@@ -192,7 +185,7 @@ viz_xyz = function(data){
   return();
 }
 
-#--------------END: READ UBICOMP LABEL------------------------
+
 
 load_labelIDConfig_plc = function(configfile){
   labelIDConfig = readLines(configfile)
@@ -212,8 +205,7 @@ load_labelIDConfig_pamap = function(configfile){
 }
 
 
-#-------------START: feature generation function region-------------------
-
+# equal-depth binning functions
 
 bin.equalfreq_num = function(num, threshold){ max(which(threshold < num))}
 bin.equalfreq_array = function(vec, threshold){ unlist(lapply(vec, bin.equalfreq_num, threshold=threshold));}
@@ -234,12 +226,14 @@ bin.equalfreq <- function(x,n){
 
 #----------START: generate doc function region-------------------
 
+# majority voting the label for a doc given the labels of each frame 
 voteMajor = function(frameLabels){
  # frameLabels = label[((docIndex-1)*framesInDoc+1):(docIndex*framesInDoc)]
   docLabel = names(which.max(table(frameLabels))) 
   return(as.numeric(docLabel))
 }
 
+# write a doc to file
 writeDoc = function(docIndex, dir){
   docStr = ""
   for(i in 1:framesInDoc){
@@ -250,6 +244,7 @@ writeDoc = function(docIndex, dir){
   write(docStr, file=paste(dir, "\\doc_", docIndex, "_", docLabel, ".txt", sep=""));
 }
 
+# given the feature values and feature names, get the words
 data_toString = function(colnames, data){
   str = "";
   for(i in 1:length(data[,1])){
@@ -316,6 +311,7 @@ data.fft_energy_entropy = function(dataframe){
 
 
 #--------------------------------------------------------------------
+#visualizing the ground truth
 viz_ground_truth = function(dataset, doc_labels){
   plot(1, type="o", col=colors[1],xlim=c(1, length(doc_labels) * 1.2), ylim=c(0, 2.3), 
        xlab="motion-documents", ylab="topic probability", cex=1.2)
@@ -349,6 +345,7 @@ viz_ground_truth = function(dataset, doc_labels){
   }
 }
 
+#visualizing the topic distribution
 viz_topic_distribution = function(pred, K){
   for(i in 1:K){
     #lines(pred[,i], type="o", pch=22, lty=2, col=colors[i])
@@ -356,6 +353,7 @@ viz_topic_distribution = function(pred, K){
   }
 }
 
+# smooth the classification result by majority voting in a sliding window
 smooth_classify_tag = function(pred_class){
   smoothed = pred_class;
   window_size = 5;
@@ -367,6 +365,7 @@ smooth_classify_tag = function(pred_class){
   return(smoothed);
 }
 
+#plot a 3d (x,y,z)-time matrix
 plot_data = function(data){
   min = min(min(data[,1]), min(data[,2]), min(data[,3]));
   max = max(max(data[,1]), max(data[,2]), max(data[,3]));

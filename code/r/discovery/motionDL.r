@@ -7,7 +7,6 @@ source(paste(srcdir, "feature_factory.R", sep=''))
 
 #configurable parameters
 dataset = "UBICOMP";
-extend = "fft_energy_entropy";
 iteration_mode = TRUE;
 FILTER_KNOWN_CLASSIFIER = FALSE;
 
@@ -15,6 +14,7 @@ framesInDoc = 2 * 30; #30sec PLCouple1 + Ubicomp
 #framesInDoc = 2 * 10; #Opportunity
 #framesInDoc = 20; #PAMAP
 
+#======================== read data ====================================
 if(dataset == "PLCouple1"){
   base="D:\\lessons\\motion recognition\\dataset\\PLCouple1\\sensor\\2006-08-23";
   setwd(base);
@@ -35,7 +35,7 @@ if(dataset == "UBICOMP"){
   data = rawData[,1:12]
   featureCnt = 12; 
   #read label
-  label = read.ubilabel("activities.txt", "label\\day1-activities.txt")
+  label = read.ubilabel("label\\day1-activities.txt", "activities.txt")
   docCnt = as.integer(length(label) / framesInDoc)
   label = label[1:(framesInDoc*docCnt)]
 }
@@ -53,21 +53,21 @@ if(dataset == "OPPOTUNITY"){
 }
 
 if(dataset == "PAMAP"){
-  base = "D:\\lessons\\motion recognition\\dataset\\PAMAP2_Dataset\\Protocol";
+  base = "D:\\lessons\\motion recognition\\dataset\\PAMAP2_Dataset\\experiment";
   setwd(base);
-  filenames = c("subject102.dat");
-  data = read.downsample.pamap(filenames[1], 2);
+  #filenames = c("subject102.dat");
+  #data = read.downsample.pamap(filenames[1], 2);
   featureCnt = 18;
-  label = read.downsample.label.pamap(filenames[1], 2);
-  docCnt = as.integer(length(label) / framesInDoc);
-  label = label[1:(framesInDoc*docCnt)];
+  #label = read.downsample.label.pamap(filenames[1], 2);
+  #docCnt = as.integer(length(label) / framesInDoc);
+  #label = label[1:(framesInDoc*docCnt)];
+  data = read.table("data_subject101.txt")
+  label = c(read.table("label_subject101.txt")[,1])
+  docCnt = as.integer(length(label) / framesInDoc)
 }
 
-#=================== read file & generate feature ==============================
 
-binned = matrix(0, length(data[,1]), featureCnt)
-
-#-------------START: feature generation function region-------------------
+#--------------- function region: binning functions -----------------------
 
 
 bin.equalfreq_num = function(num, threshold){ ifelse(num<threshold[1], 0, max(which(threshold <= num)))}
@@ -83,7 +83,9 @@ bin.equalfreq <- function(x,n){
   x[order(x)] <- rep(seq.int(n),nrep)
   x
 }
-#-------------START: feature generation function region-------------------
+
+
+# ============= load quantizing threshold & binning feature =================
 
 if(dataset == "PLCouple1"){
   quantize_threshold = read.table("../quantize_data/quantization.txt")
@@ -102,8 +104,8 @@ if(dataset == "PAMAP"){
   quantize_threshold = read.table("fps2_quantization.txt");
 }
 
+binned = matrix(0, length(data[,1]), featureCnt)
 for(i in 1:featureCnt){
-  #binned[, i] = bin.equalfreq(data[,i],20)
   binned[, i] = bin.equalfreq_array(data[,i], quantize_threshold[,i])
 }
 
@@ -151,77 +153,54 @@ if(dataset == "PAMAP"){
   raw_sensor_dim = 1:9;
 }
 
-if(extend == "fft_coe"){
-  fftnum = 5;
-  extendedFeatureCnt = featureCnt + length(raw_sensor_dim) * fftnum * 2;
-  features = c(features, paste("fft", c(1:(length(raw_sensor_dim) * fftnum * 2)), sep='_'))
-}
-if(extend == "fft_energy_entropy"){
-  N = length(raw_sensor_dim);
-  extendedFeatureCnt = featureCnt + N * 2;
-  features = c(features, paste("energy",c(1:N), sep='_'), paste("entropy", c(1:N), sep='_'));
-}
-
-doc_data_m = matrix(0,nrow = docCnt, ncol = extendedFeatureCnt)
-for(row in 1:docCnt){
-  frameRows = ((row-1)*framesInDoc + 1) : (row * framesInDoc)
-  for(col in 1:featureCnt){    
-    doc_data_m[row, col] = mean(data[frameRows, col])
-  }
-  if(extend == "fft_coe"){
-    doc_data_m[row, (featureCnt+1):extendedFeatureCnt] = data.fft(data.frame(data[frameRows, raw_sensor_dim]), fftnum);
-  }
-  if(extend == "fft_energy_entropy"){
-    doc_data_m[row, (featureCnt+1):extendedFeatureCnt] = data.fft_energy_entropy(data.frame(data[frameRows, raw_sensor_dim]));
-  }
-}
-doc_data = data.frame(doc_data_m)
-
-normalize_params = dataframe.get_normalize_param(doc_data);
-doc_data = dataframe.normalize(doc_data);
-
-
-#================= mean and var in other length =================
-
-
-#======================== fft word in doc =======================
-fft_word_num = 10;
-fft_params = matrix(0, nrow = docCnt, ncol = fft_word_num * length(raw_sensor_dim));
-for(row in 1:docCnt){
-  frameRows = ((row-1)*framesInDoc+1):(row*framesInDoc);
-  fft_params[row, ] = data.fft(data.frame(data[frameRows, raw_sensor_dim]), fft_word_num / 2);    
-}
-binned_fft = matrix(0, nrow = docCnt, ncol = fft_word_num * length(raw_sensor_dim));
-for(i in 1:length(fft_params[1,])){
-  binned_fft[, i] = bin.equalfreq_array(fft_params[,i], fft_bin_threshold[,i])
-}
-get_fft_feature_names = function(colname, fft_word_num){
-  return(paste(colname, 'fft', c(1:fft_word_num), sep='_'));
-}
-fft_doc_feature_names = unlist(lapply(c('hip_x', 'hip_y', 'hip_z', 'rwr_x', 'rwr_y', 'rwr_z'), get_fft_feature_names, fft_word_num= fft_word_num));
-
-
 #===================== generate doc =============================
 doc_labels = 1:docCnt
 file.remove(paste("docs\\", list.files("docs"), sep=''))
 for(docIndex in 1:docCnt){
-  #writeDoc(docIndex, "docs");
-  doc_labels[docIndex] = voteMajor(label[((docIndex-1)*framesInDoc+1):(docIndex*framesInDoc)])
-  frame_words = data_toString(doc_features, binned[((docIndex-1)*framesInDoc+1):(docIndex*framesInDoc),] );
-  #fft_words = data_toString(fft_doc_feature_names,matrix(binned_fft[docIndex,],nrow=1))
-  #write_doc(paste(frame_words, fft_words,fft_words,fft_words,fft_words, sep=" "), 'docs', paste(docIndex, '_', doc_labels[docIndex], '.txt', sep=""));
+  start = (docIndex-1)*framesInDoc+1
+  end = docIndex*framesInDoc
+  doc_labels[docIndex] = voteMajor(label[start:end])
+  frame_words = data_toString(doc_features, binned[start:end,] );
   write_doc(frame_words, 'docs', paste(docIndex, '_', doc_labels[docIndex], '.txt', sep=""));
 }
-doc_label_set = names(table(doc_labels))
+doc_label_set = as.integer(names(table(doc_labels)))
 
+
+#===================== generate data for clustering ========================
+if(dataset == "UBICOMP"){
+  doc_data_clu_m = matrix(0, nrow = length(doc_labels), ncol=11);
+  for(i in 1:length(doc_labels)){
+    start = (i-1) * framesInDoc + 1
+    end = i * framesInDoc
+    pocket = data[start:end, 1:3]
+    wrist = data[start:end, 7:9]
+    doc_data_clu_m[i, ] = get_train_feature.ubicomp(pocket, wrist);
+  }
+  doc_data_clu = data.frame(doc_data_clu_m)
+  doc_data_clu = dataframe.normalize(doc_data_clu);
+}
+
+if(dataset == "PAMAP"){
+  doc_data_clu_m = matrix(0, nrow = length(doc_labels), ncol=9)
+  for(i in 1:length(doc_labels)){
+    start = (i-1) * framesInDoc + 1
+    end = i * framesInDoc
+    hip = data[start:end, 1:3]
+    hand = data[start:end, 4:6]
+    ankle = data[start:end, 7:9]
+    doc_data_clu_m[i, ] = get_train_feature.pamap(hip, hand, ankle);
+  }
+  doc_data_clu = data.frame(doc_data_clu_m)
+  doc_data_clu = dataframe.normalize(doc_data_clu);
+}
 # topic model
 
-#================= visualize topic distribution =============================
+#=====================start segmenting and clustering =================================
 
 library(topicmodels)
 library(tm)
 
-ovid_all <- Corpus(DirSource(paste(base, "\\docs", sep="")),readerControl = list(language = "lat"))
+ovid_all <- Corpus(DirSource(paste(base, "\\docs", sep="")),readerControl = list(language = "lat")) #load motion-documents
 
 #init all the values
 classifiers = c()
@@ -229,15 +208,16 @@ knownSegIndexes = c()
 all_doc_indexes = 1:docCnt;
 iteration_doc_indexes = all_doc_indexes;
 iteration_doc_labels = doc_labels;
-iteration_doc_data = doc_data;
+iteration_doc_data = doc_data_clu;
 ovid = ovid_all
-#K=10 # UBICOMP
-K = 6
+K=10 # UBICOMP
+#K = 8 #PAMAP2
 colors = c('gray','orange', 'red', 'blue',  'green',  'brown', 'cornflowerblue','pink', 'green4', 
            'lightcoral', 'mediumslateblue', 'navy','navajowhite', 'saddlebrown', 'gray20', 
            'darkgoldenrod3', 'dodgerblue', 'gold4', 'deeppink4', 'deeppink1', 'goldenrod2', 'gray26', 
            'greenyellow', 'lightgoldenrod4', 'mediumvioletred', 'salmon4')
 
+#function: estimate topic distribution by LDA
 get_topic_distribution = function(ovid, K){
   dtm <- DocumentTermMatrix(ovid,control=list(wordLengths=c(1,Inf)))
   train.lda <- LDA(dtm,K)   
@@ -249,9 +229,11 @@ get_topic_distribution = function(ovid, K){
 
 
 if(FILTER_KNOWN_CLASSIFIER == TRUE){  #load classifiers and filter out known activities
-  load("iterative_desk_lying_whiteboard_desk.RData");
+  load("iterative_desk_lying_whiteboard_desk.RData"); #load classifiers
+  #------- recognize and get the known motion indexes ----------
   is_known_doc = is_known_doclist(iteration_doc_data, classifiers);
   known_docs_indexes = which(is_known_doc == T)
+  #---------- remove the known motions --------------
   iteration_doc_indexes = iteration_doc_indexes[-known_docs_indexes];
   ovid = ovid_all[iteration_doc_indexes];
   iteration_doc_labels = doc_labels[iteration_doc_indexes];
@@ -260,18 +242,18 @@ if(FILTER_KNOWN_CLASSIFIER == TRUE){  #load classifiers and filter out known act
 
 
 # first time segmentation by topic model
-pred = get_topic_distribution(ovid, K);
+pred = get_topic_distribution(ovid, K); # predicting topic distribution
+#============================= segmenting ========================================
+segmentation = mergeNeighbourActivity(pred[,]) 
+segLength = segmentation[2,] - segmentation[1, ]
+segmentation = rbind(segmentation, segLength)
 # plot the distribution of topics
 viz_ground_truth(dataset, iteration_doc_labels);
 viz_topic_distribution(pred, K);
-#============================= segmentation ========================================
-segmentation = mergeNeighbourActivity(pred[,])
-#segmentation = mergeNeighbourSeg(segmentation)
 visualSegmentation(segmentation)
-segLength = segmentation[2,] - segmentation[1, ]
-segmentation = rbind(segmentation, segLength)
 
-# start iteration - build classifier
+
+#=============== start iteration - building classifiers ===========================
 
 while(TRUE){
   # if needed, start another segmentation iteration
@@ -282,9 +264,10 @@ while(TRUE){
       iteration_doc_indexes = iteration_doc_indexes[-known_docs_indexes];
       ovid = ovid_all[iteration_doc_indexes];
       iteration_doc_labels = doc_labels[iteration_doc_indexes];
-      iteration_doc_data = doc_data[iteration_doc_indexes, ]
+      iteration_doc_data = doc_data_clu[iteration_doc_indexes, ]
       knownSegIndexes = c();
       
+    
       pred = get_topic_distribution(ovid, K);
       # plot the distribution of topics
       viz_ground_truth(dataset, iteration_doc_labels);
@@ -297,9 +280,7 @@ while(TRUE){
     } 
   }
   
-  # build another classifier
-  #=============================prepare training samples ==============================================
-  
+  #================= prepare training samples ===========================
   longSegIndex = get_long_segmentation(segmentation, knownSegIndexes)
   while(is_known_segment(segmentation, longSegIndex, classifiers, iteration_doc_data) == T){
     knownSegIndexes = c(knownSegIndexes, longSegIndex)
@@ -307,16 +288,24 @@ while(TRUE){
   }
   knownSegIndexes = c(knownSegIndexes, longSegIndex)
   
+  # if no long unknown segment, terminate the iteration process
+  terminate_thres = 30
+  if(segmentation[3,longSegIndex] < terminate_thres) break;
+  
   posTrainIndex = samplePosExamples(longSegIndex, segmentation)
-  topicDiffThreshold = 1.2
+  topicDiffThreshold = 2.5
   negTrainIndex = sampleNegExamples(longSegIndex, segmentation, topicDiffThreshold)
-  while(length(negTrainIndex) < max(100,length(posTrainIndex))){
+  while(length(negTrainIndex) <  max(100,length(posTrainIndex)*1.5) && topicDiffThreshold>0.5){
     topicDiffThreshold = topicDiffThreshold - 0.1;
+    negTrainIndex = sampleNegExamples(longSegIndex, segmentation, topicDiffThreshold)
+  }
+  while(length(negTrainIndex) > length(negTrainIndex)*5){
+    topicDiffThreshold = topicDiffThreshold + 0.1;
     negTrainIndex = sampleNegExamples(longSegIndex, segmentation, topicDiffThreshold)
   }
   viz_train_sample(posTrainIndex, negTrainIndex, segmentation, iteration_doc_labels);
   
-  
+  #======================= prepare training data =======================
   train_index = union(posTrainIndex, negTrainIndex)
   index = 1:length(iteration_doc_labels)
   test_index <- index[-train_index]
@@ -325,48 +314,46 @@ while(TRUE){
   test_x = iteration_doc_data[test_index, ]
   
   if(iteration_mode == TRUE){ #add known doc as negtive examples
-    neg_known_indexes = sample(all_doc_indexes[-iteration_doc_indexes], 0.1 * length(iteration_doc_indexes))
-    neg_known_data = doc_data[neg_known_indexes, ]
+    neg_known_indexes = if(length(all_doc_indexes)==length(iteration_doc_indexes)) c() else sample(all_doc_indexes[-iteration_doc_indexes], 0.1 * length(iteration_doc_indexes))
+    neg_known_data = doc_data_clu[neg_known_indexes, ]
     train_x = rbind(train_x, neg_known_data)
     train_y = c(train_y, rep(-1, length(neg_known_indexes)))
   }
   
   train_data = data.frame(train_x, train_y);
   
+  clu_feature_length = if(dataset == "UBICOMP") 11 else 9
+  colnames(train_data) = c(paste("f_", c(1:clu_feature_length), sep=''), 'target')
+  colnames(test_x) = paste("f_", c(1:clu_feature_length), sep='')
   
-  colnames(train_data) = c(features, 'target')
-  colnames(test_x) = features;
-  
-  # ===================================== co-training ===================================================
-  
+  # ===================================== co-training ======================================
   train_data1 = train_data;
   train_data2 = train_data;
   for(i in 1:4){
     exchangeNum = as.integer(length(test_index) * 0.2);
-    model1 = decision_tree.train(train_data1);
-    pred_score1 = decision_tree.predict(model1, test_x);
-    confident_index1 = decision_tree.find_confident_example(pred_score1, exchangeNum, test_index)
-    confident_x1 = doc_data[test_index[confident_index1], ]
+    model1 = decision_tree.train(train_data1); #train model_1
+    pred_score1 = decision_tree.predict(model1, test_x);  # predict with model_1
+    confident_index1 = decision_tree.find_confident_example(pred_score1, exchangeNum, test_index) # get confident data with model1
+    confident_x1 = iteration_doc_data[test_index[confident_index1], ]
     confident_y1 = ifelse(pred_score1[confident_index1] > 0, 1, -1);
     confident_data1 = data.frame(confident_x1, confident_y1)  
-    colnames(confident_data1) = c(features, 'target')
+    colnames(confident_data1) = c(paste("f_", c(1:clu_feature_length), sep=''), 'target')
     
-    model2 = svm.train(train_data2);
-    pred_score2 = svm.predict(model2, test_x)
-    confident_index2 = svm.find_confident_example(pred_score2, exchangeNum, test_index)
-    confident_x2 = doc_data[test_index[confident_index2], ]
+    model2 = svm.train(train_data2); #train model_2
+    pred_score2 = svm.predict(model2, test_x) # predict with model_2
+    confident_index2 = svm.find_confident_example(pred_score2, exchangeNum, test_index)  # get confident data with model_2
+    confident_x2 = iteration_doc_data[test_index[confident_index2], ]
     confident_y2 = ifelse(pred_score2[confident_index2] > 0, 1, -1);
     confident_data2 = data.frame(confident_x2, confident_y2)  
-    colnames(confident_data2) = c(features, 'target')
+    colnames(confident_data2) = c(paste("f_", c(1:clu_feature_length), sep=''), 'target')
     
-    train_data1 = rbind(train_data1, confident_data2)
-    train_data2 = rbind(train_data2, confident_data1)
+    train_data1 = rbind(train_data1, confident_data2) # add confident model_2 data into model_1 training data
+    train_data2 = rbind(train_data2, confident_data1) # add confident model_1 data into model_2 training data
   }
   
   viz_pred_result(pred_score2, test_index, iteration_doc_labels)
   classifiers = c(classifiers, model2)
 }
-
 
 
 

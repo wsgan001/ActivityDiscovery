@@ -1,22 +1,24 @@
 #============================= segmentation ========================================
+
+# decide a window of documents is a mini-segment
 isActivity = function(x){
   sumVar = 0;
   frameCnt = length(x[,1]);
   for(i in 1:K){sumVar = sumVar + var(x[,i]);}
-  isAct = ifelse(sumVar<0.25,1,0);
+  isAct = ifelse(sumVar<0.23,1,0);
   #isAct = ifelse(sumVar<0.30,1,0);
   if(isAct == F){
     for(frameIndex in 1:length(x[,1])){
       sumVar = 0;
       for(i in 1:K){sumVar = sumVar + var(x[-frameIndex,i]);}
       #isAct = ifelse(sumVar<0.25,1,isAct);
-      isAct = ifelse(sumVar<0.15,1,isAct);
+      isAct = ifelse(sumVar<0.2,1,isAct);
     }
   }
   return(isAct)
 }
 
-
+# merge neighbouring mini-segments
 mergeNeighbourActivity = function(x){
   len = length(x[,1])
   actSize = 10
@@ -46,6 +48,8 @@ mergeNeighbourActivity = function(x){
   return(rbind(startVec, endVec))
 }
 
+
+# we don't use it now
 mergeNeighbourSeg = function(segmentation){
   cur_start = segmentation[1,1];
   cur_end = segmentation[2,1];
@@ -67,15 +71,17 @@ mergeNeighbourSeg = function(segmentation){
   return(rbind(start_vec, end_vec));
 }
 
+# visualizing segmentation results
 visualSegmentation = function(startEndList){
   pairCnt = length(startEndList[1,])
   for(i in 1:pairCnt){
     for(j in startEndList[1,i] : startEndList[2,i]){
-      points(x = j, y = 1.2, col = ifelse(i%%2==0, 'gray', 'navy'), pch = 16)
+      points(x = j, y = 1.0, col = ifelse(i%%2==0, 'gray', 'navy'), pch = 16)
     }
   }
 }
 
+#visualizing one segment given an index
 visualTargetSegmentation = function(startEndList, viz_index){
   pairCnt = length(startEndList[1,])
   for(i in 1:pairCnt){
@@ -83,7 +89,6 @@ visualTargetSegmentation = function(startEndList, viz_index){
       if(j %in% viz_index){
         points(x = j - viz_index[1], y =1.2, col = ifelse(i%%2==0, 'gray', 'navy'), pch = 16)
       }
-      
     }
   }
 }

@@ -1,4 +1,4 @@
-
+#====================== feature computing functions ================================
 
 get_verticle = function(data_3d){
   mx = mean(data_3d[,1])
@@ -183,5 +183,47 @@ get_feature = function(data_3d){
                energy_low_hori, energy_midlow_hori, energy_midhigh_hori, energy_high_hori,
                fft_entropy_vert, fft_entropy_hori, energy_ratio
                )
+  return(features)
+}
+
+get_train_feature.ubicomp = function(pocket, wrist){
+  pocket_mean_y = mean(pocket[,2])
+  pocket_mean_x = mean(pocket[,1])
+  pocket_vert = get_verticle(pocket)
+  pocket_hori = get_horizontal(pocket, pocket_vert)
+  pocket_mean_vert = mean(pocket_vert)
+  pocket_mean_z = mean(pocket[,3])
+  pocket_energy_ratio = get_vec_energy(pocket_hori) / get_vec_energy(pocket_vert)
+  pocket_energy_high_vert = get_fft_energy_high(pocket_vert)
+  pocket_sd_hori = sd(pocket_hori)
+  wrist_mean_y = mean(wrist[,2])
+  wrist_vert = get_verticle(wrist)
+  wrist_mean_vert = mean(wrist_vert)
+  wrist_mean_x = mean(wrist[,1])
+  wrist_mean_z = mean(wrist[,3])
+  features = c(pocket_mean_y, pocket_mean_x, pocket_mean_vert, pocket_mean_z,
+              pocket_energy_ratio, pocket_energy_high_vert, pocket_sd_hori,
+              wrist_mean_y, wrist_mean_vert, wrist_mean_x, wrist_mean_z);
+  return(features)
+}
+
+get_train_feature.pamap = function(hip, hand, ankle){
+  hip_mean_x = mean(hip[,1])
+  hip_vert = get_verticle(hip)
+  hip_energy_low_vert = get_fft_energy_low(hip_vert)
+  hand_mean_z = mean(hand[,3])
+  hand_vert = get_verticle(hand)
+  hand_hori = get_horizontal(hand, hand_vert)
+  hand_energy_ratio = get_vec_energy(hand_hori) / get_vec_energy(hand_vert)
+  hand_sd_hori = sd(hand_hori)
+  ankle_mean_x = mean(ankle[,1])
+  ankle_mean_y = mean(ankle[,2])
+  ankle_vert = get_verticle(ankle)
+  ankle_skew_vert = get_skew(ankle_vert)
+  ankle_hori = get_horizontal(ankle, ankle_vert)
+  ankle_energy_hori_low = get_fft_energy_low(ankle_hori)
+  features = c(hip_mean_x, hip_energy_low_vert,
+               hand_mean_z, hand_energy_ratio, hand_sd_hori,
+               ankle_mean_x, ankle_mean_y, ankle_skew_vert, ankle_energy_hori_low)
   return(features)
 }

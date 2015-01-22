@@ -9,7 +9,7 @@ if(dataset == "PLCouple1"){
   setwd(base);
 }
 if(dataset== "UBICOMP"){
-  base = "D:\\lessons\\motion recognition\\dataset\\dataset_huynh_ubicomp08\\"
+  base = "D:\\lessons\\motion recognition\\dataset\\dataset_huynh_ubicomp08"
   setwd(base);
 }
 
@@ -18,20 +18,21 @@ if(dataset == "PAMAP"){
   setwd(base);
 }
 
-#========================== LOAD CLASSIFIER =============================
-load("sub102_iron_unknown_walking_sitting_lying.R")  #classifiers
-#load("classifiers\\day4_normalparams.RData"); # normalize_params
 
-framesInDoc = 2 * 30
+framesInDoc = 2 * 30 #ubicomp
+#framesInDoc = 2*10 #pamap
 
-test_days = c(1);
-test_classifier_indexes = c(1, 3,4,5)
-ground_truth_activities = c(17, 4, 2,1)
+#================ prepare data ========================
 
-for(day in test_days){
+feature = "NEW_FEATURE"
+
+if(feature == "OLD_FEATURE"){
+  load("sub102_iron_unknown_walking_sitting_lying.R")  #classifiers
+  
+  day = 2
   filesnames =  paste("data\\day", day, "-data.txt", sep='');
   labelfiles = paste("label\\day", day, "-activities.txt", sep='')
-  label = read.ubilabel("activities.txt", labelfiles);
+  label = read.ubilabel(labelfiles, "activities.txt");
   if(dataset == "PLCouple1"){
     testdata_date = "2006-09-14"
     testdata_dir = "2006-09-14\\acc_data_fps2_matched"
@@ -113,33 +114,65 @@ for(day in test_days){
   
   
   doc_data_m =  dataframe.normalize(doc_data_m);
+}
+
+if(feature == "NEW_FEATURE_UBI"){
+  load("classifiers_newfeature\\day2_meeting_desk_unknown_walk_phone.RData")# load classifiers
+  load("classifiers_newfeature\\day2_doc_data_clu.RData") # load doc_data_clu
+  doc_data_m = doc_data_clu
   
-  #===================== generate doc label =============================
-  docCnt = length(data[,1]) / framesInDoc
+  label = read.ubilabel("label\\day2-activities.txt", "activities.txt"); #load ground-truth labels
+}
+
+if(feature == "NEW_FEATURE_PAMAP"){
+  setwd("D:\\lessons\\motion recognition\\dataset\\PAMAP2_Dataset\\experiment\\")
+  framesInDoc = 2*10
+  load("classifiers_new_feature\\109_fold_computer_house_soccer.RData")
+  data = read.table("data_subject109_all.txt") #load data
+  label = c(read.table("label_subject109_all.txt")[,1]) #load ground-truth label
+  docCnt = as.integer(length(label) / framesInDoc)
+  
   doc_labels = 1:docCnt
   for(docIndex in 1:docCnt){
     doc_labels[docIndex] = voteMajor(label[((docIndex-1)*framesInDoc+1):(docIndex*framesInDoc)])
   }
-  doc_label_set = names(table(doc_labels))
   
+  doc_data_clu_m = matrix(0, nrow = length(doc_labels), ncol=9)
+  for(i in 1:length(doc_labels)){
+    start = (i-1) * framesInDoc + 1
+    end = i * framesInDoc
+    hip = data[start:end, 1:3]
+    hand = data[start:end, 4:6]
+    ankle = data[start:end, 7:9]
+    doc_data_clu_m[i, ] = get_train_feature.pamap(hip, hand, ankle);
+  }
+  doc_data_clu = data.frame(doc_data_clu_m)
+  doc_data_clu = dataframe.normalize(doc_data_clu);
+  
+  doc_data_m = doc_data_clu  
+}
+#===================== generate doc label =============================
+docCnt = length(doc_data_m[,1])
+doc_labels = 1:docCnt
+for(docIndex in 1:docCnt){
+  doc_labels[docIndex] = voteMajor(label[((docIndex-1)*framesInDoc+1):(docIndex*framesInDoc)])
+}
+doc_label_set = as.integer(names(table(doc_labels)))
+
+test_classifier_indexes = c(1,2,4,5)
+ground_truth_activities = c(34, 14,20,18)
+
   # remove unlabeled data
   unlabelled_index = which(doc_labels == 0);
   doc_labels = doc_labels[-unlabelled_index];
   doc_data_m = doc_data_m[-unlabelled_index,];
   docCnt = length(doc_labels)   # remove unknowns
-  
-  
-  
+
   test_x = data.frame(doc_data_m)
- # for(i in 1:extendedFeatureCnt){
-#    test_x[, i] = (test_x[, i] - normalize_params[1,i]) / ifelse(normalize_params[2,i] == 0, 1, normalize_params[2,i]);
-  #}
-  
-#  test_x = dataframe.normalize(test_x);
-  colnames(test_x) = features;
+  colnames(test_x) = paste("f_", c(1:length(test_x[1,])), sep='');
   
   
-  #================= visualize topic distribution =============================
+  #================= visualize ground truth =============================
   colors = c('gray','orange', 'red', 'blue',  'green',  'brown', 'cornflowerblue',
              'pink', 'green4', 'lightcoral', 'mediumslateblue', 'navy','saddlebrown','navajowhite',
               'gray20', 'darkgoldenrod3', 'dodgerblue', 'gold4', 'deeppink4')
@@ -147,9 +180,6 @@ for(day in test_days){
   viz_ground_truth(dataset, doc_labels);
   
   #==================== classify data with models ==================================
-  
-  
-  
   classify_results = c();
   predscore_results = c();
   
@@ -177,14 +207,14 @@ for(day in test_days){
     classify_results = rbind(classify_results, pred_class);
     predscore_results = rbind(predscore_results, pred_score);
     
-    ground_pos = which(doc_labels == activity)
-    ground_neg = which(doc_labels != activity)
+    ground_pos = which(doc_labels == activity)  #true_positive + false_negative
+    ground_neg = which(doc_labels != activity)  #true_negative + false_positive
     
     test_y_pos = which(pred_class == T)
     test_y_neg = which(pred_class == F)
     
-    pos = length(ground_pos)
-    neg = length(ground_neg)
+    pos = length(ground_pos)  
+    neg = length(ground_neg)   
     t_pos = length(intersect(ground_pos, test_y_pos))
     t_neg = length(intersect(ground_neg, test_y_neg))
     f_pos = length(intersect(ground_neg, test_y_pos))
@@ -205,10 +235,16 @@ for(day in test_days){
       points(x=doc, y=1 - 0.15*i, col=ifelse(pred_class[doc]==T, 'green', 'red'), pch=16);
     }
   }
+  results = data.frame(coverage, sensitivity, specify,  accuracy)
+  print(results);
+
+
+
   
+  # computing and visualizing clustering result
   raw_classes = classifyByMax(classify_results, predscore_results);
   smoothed_classes = smoothResults(raw_classes, 15);
-  writeDiary(smoothed_classes, 15);
+  #writeDiary(smoothed_classes, 15);
   
   viz_ground_truth(dataset, doc_labels);
  
@@ -225,39 +261,8 @@ for(day in test_days){
      }
    }
   
-  
-  #is_known_class = is_known_doclist(test_x, classifiers);
-  #for(doc in 1:docCnt){
-  #  points(x=doc, y=1.1, col=ifelse(is_known_class[doc]==T, 'green', 'red'), pch=16);
-  #}
-  
  
-  # a class with multiple classifiers
- is_activity = rep(F, docCnt);
-  for(doc in 1:docCnt){
-    class_res = classify_results[, doc];
-    is_activity[doc] = ifelse(length(class_res[class_res==T]) > 0, T, F);
-  }
- activity = 14;
- ground_pos = which(doc_labels == activity)
- ground_neg = which(doc_labels != activity)
- 
- test_y_pos = which(is_activity == T)
- test_y_neg = which(is_activity == F)
- 
- pos = length(ground_pos)
- neg = length(ground_neg)
- t_pos = length(intersect(ground_pos, test_y_pos))
- t_neg = length(intersect(ground_neg, test_y_neg))
- f_pos = length(intersect(ground_neg, test_y_pos))
- sensitivity = build_percent_str(t_pos, pos);
- accuracy = build_percent_str(t_pos + t_neg, pos + neg);
- print(sensitivity)
- print(accuracy)
- 
-  results = data.frame(coverage, sensitivity, accuracy)
-  print(results);
-}
+
 
 classifyByMax = function(classify_results, predscore_results){
   results = rep(-1, docCnt);
